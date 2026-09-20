@@ -1,72 +1,153 @@
-# SecuAgent - Security-Focused AgentOS Library
+# SecuAgentOS - Security-Focused Agent Operating System
 
-보안 솔루션에 특화된 AI 에이전트 운영체제 (AgentOS) 를 구축하기 위한 Python 라이브러리입니다.
+보안 특화 AI Agent를 안전하게 실행하고, 외부 보안 솔루션을 패키지/라이브러리 형태로 연결할 수 있도록 설계된 Python 기반 AgentOS Core입니다.
 
-## 주요 기능
+> `SecuAgentOS`의 핵심은 특정 EDR/SIEM/Firewall 또는 특정 Agent Framework에 종속되지 않는 **Security Kernel + Runtime + Extension SPI**입니다.
 
-### 🔐 보안 코어
-- **SecurityContext**: 보안 컨텍스트 관리, 권한 수준 제어
-- **SecureAgent**: 보안 기능이 내장된 기본 에이전트 클래스
-- **SecurityEvent**: 보안 이벤트 시스템 및 큐 관리
+## Architecture
 
-### 🛡️ 보안 서비스
-- **EncryptionService**: AES-256-GCM, RSA-4096 암호화 및 키 관리
-- **AuthenticationManager**: 다중 인증 (MFA), JWT 세션, 계정 잠금
-- **AuthorizationManager**: RBAC(역할 기반 접근 제어), 권한 검증
-- **InputValidator**: SQL 인젝션, XSS, 명령어 인젝션, 경로 순회 방지
-- **AuditLogger**: 규정 준수 (GDPR, HIPAA, PCI-DSS) 감사 로그
-
-### 🤖 전문 에이전트
-- **ThreatDetectorAgent**: 위협 탐지 및 패턴 분석
-- **IncidentResponderAgent**: 사고 대응 자동화
-
-## 설치
-
-```bash
-# 개발 모드로 설치
-pip install -e .[dev]
-
-# 일반 설치
-pip install secuagent
+```text
+                     SecuAgentOS
+                  Security Kernel
+                         |
+          +--------------+--------------+
+          |              |              |
+      AgentRuntime   SecurityPolicy   ToolGateway
+          |              |              |
+     AgentRegistry  Capability/Risk   ToolRegistry
+          |              |              |
+          +--------------+--------------+
+                         |
+                 Security Agents
+                         |
+          +--------------+--------------+
+          |              |              |
+       Sentinel       Defender       Threat Intel
+                         |
+                    External Tools
+              EDR / SIEM / IAM / Firewall
 ```
 
-## 빠른 시작
+### Core responsibilities
+
+- **Agent Runtime**: Agent lifecycle, task execution, result normalization
+- **Agent Registry**: Built-in 및 third-party Agent package discovery
+- **Security Policy**: RBAC와 분리된 capability/policy 기반 실행 제어
+- **Tool Gateway**: 외부 보안 솔루션 호출의 단일 보안 경계
+- **Security Context / Events / Audit**: 실행 주체, 세션, 보안 이벤트 및 감사 추적
+- **Extension SPI**: EDR, SIEM, SOAR, IAM, Firewall, Cloud 및 전문 Agent를 패키지로 확장
+
+## External package model
+
+외부 Agent는 Python package로 배포하고 `secuagentos.agents` entry point를 통해 등록할 수 있습니다.
+
+```toml
+[project.entry-points."secuagentos.agents"]
+my_agent = "my_security_agent.provider:get_agent_spec"
+```
+
+Provider는 `AgentSpec`을 반환합니다.
 
 ```python
-from secuagent import SecurityContext, SecureAgent, SecurityLevel
+from secuagent.core.registry import AgentSpec
 
-# 보안 컨텍스트 생성
-ctx = SecurityContext(
-    security_level=SecurityLevel.HIGH,
-    user_id="admin",
-    roles=["security_admin"]
-)
 
-# 보안 에이전트 생성
-agent = SecureAgent(name="SecurityBot", context=ctx)
-
-# 입력 검증
-from secuagent.security import InputValidator
-validator = InputValidator()
-if validator.validate_input(user_input):
-    # 안전한 처리
-    pass
+def get_agent_spec():
+    return AgentSpec(
+        name="malware-agent",
+        version="1.0.0",
+        agent_class=MalwareAgent,
+        capabilities=("malware.detect", "malware.analyze"),
+    )
 ```
 
-## 프로젝트 구조
+Runtime에서 설치된 Agent package를 검색할 수 있습니다.
 
+```python
+from secuagent import AgentRegistry, AgentRuntime
+
+registry = AgentRegistry()
+registry.load_installed_packages()
+runtime = AgentRuntime(registry=registry)
 ```
+
+## External security-tool model
+
+외부 보안 제품은 `SecurityTool` adapter로 연결합니다. Agent가 제품 SDK/API를 직접 호출하지 않고 Tool Gateway를 통과하도록 하는 것이 기본 원칙입니다.
+
+```python
+from secuagent import SecurityTool, ToolGateway, ToolRegistry
+
+class EDRTool(SecurityTool):
+    name = "edr"
+
+    def capabilities(self):
+        return {"endpoint.isolate", "endpoint.release"}
+
+    async def execute(self, action, **kwargs):
+        ...
+```
+
+실제 실행 흐름은 다음과 같습니다.
+
+```text
+Agent -> Task -> Policy -> Capability -> ToolGateway -> Adapter -> Security Product
+```
+
+## Execution policy
+
+기본 정책은 **deny-by-default**입니다. Agent에 capability를 명시적으로 부여해야 실행할 수 있습니다.
+
+```python
+from secuagent import SecurityPolicy
+
+policy = SecurityPolicy()
+policy.grant("defender", "endpoint.isolate")
+policy.set_approval_required({"endpoint.isolate"})
+```
+
+향후 정책 엔진은 위험도, 대상 범위, tenant, 시간, 승인자, resource quota 등의 조건을 추가할 수 있도록 확장합니다.
+
+## Installation
+
+```bash
+pip install secuagentos
+```
+
+개발 환경:
+
+```bash
+pip install -e .[dev]
+```
+
+## Package layout
+
+```text
 secuagent/
 ├── secuagent/
-│   ├── core/           # 핵심 모듈 (context, agent, events)
-│   ├── security/       # 보안 서비스 (crypto, auth, validator, audit)
-│   ├── agents/         # 전문 에이전트 (detector, responder)
-│   └── utils/          # 유틸리티 (logger)
-├── examples/           # 예제 코드
-├── tests/              # 테스트
-└── pyproject.toml      # 패키지 설정
+│   ├── core/           # runtime, registry, task, context, events
+│   ├── security/       # authentication, authorization, policy, crypto, audit
+│   ├── agents/         # built-in security agents
+│   ├── tools/          # external security-tool SPI and gateway
+│   └── utils/
+├── examples/
+├── tests/
+└── pyproject.toml
 ```
 
-## 라이선스
+## Design principles
+
+1. **Security Kernel first** — 보안 정책과 실행 통제를 Agent보다 우선한다.
+2. **Deny by default** — 명시적으로 허용되지 않은 Agent/Action/Tool은 실행하지 않는다.
+3. **Framework agnostic** — LangGraph 등 특정 Agent Framework는 Core가 아니라 integration layer로 취급한다.
+4. **Tool isolation** — 외부 보안 제품은 Tool Gateway/Adapter 뒤에 격리한다.
+5. **Package extensibility** — 외부 Agent와 Tool을 Python package로 설치할 수 있도록 한다.
+6. **Auditability** — 모든 중요한 실행은 SecurityEvent/Audit으로 추적할 수 있어야 한다.
+
+## Scope note
+
+Repository의 `.agents/skills/luna-chat-coder`는 SecuAgentOS runtime에 포함되는 기능이 아닙니다. 이는 프로젝트 개발을 위한 별도의 개발 지원 skill이며 AgentOS 배포 package에 포함되지 않는 **development-time tooling**으로 취급합니다.
+
+## License
 
 MIT License
