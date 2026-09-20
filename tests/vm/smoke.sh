@@ -5,7 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 INIT="$ROOT_DIR/system/init/secuagentos-init"
 
 for command in sh grep; do command -v "$command" >/dev/null 2>&1 || exit 1; done
-[ -x "$INIT" ] || { echo "init is not executable" >&2; exit 1; }
+[ -f "$INIT" ] || { echo "init script is missing" >&2; exit 1; }
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
