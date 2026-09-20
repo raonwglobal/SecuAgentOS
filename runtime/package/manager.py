@@ -46,7 +46,13 @@ class PackageAudit(Protocol):
 
 class PackageSandbox:
     def context(self, manifest: PackageManifest) -> Mapping[str, object]:
-        return {"capabilities": manifest.capabilities, "permissions": manifest.permissions, "tools": manifest.tools, "resources": dict(manifest.resources), "network": dict(manifest.network)}
+        return {
+            "capabilities": manifest.capabilities,
+            "permissions": manifest.permissions,
+            "tools": manifest.tools,
+            "resources": dict(manifest.resources),
+            "network": dict(manifest.network),
+        }
 
 class PackageManager:
     def __init__(self, trust: TrustVerifier, runtime: RuntimeCompatibility, audit: PackageAudit) -> None:
@@ -101,8 +107,12 @@ class PackageManager:
         self._audit.append({"package": name, "state": record.state.value, "event": "disable"})
         return record
 
+    def get(self, name: str) -> PackageRecord:
+        return self._packages[name]
+
     def sandbox_context(self, name: str) -> Mapping[str, object]:
-        record = self._packages[name]; self._require(record, PackageState.INSTALLED, PackageState.ACTIVATED)
+        record = self._packages[name]
+        self._require(record, PackageState.INSTALLED, PackageState.ACTIVATED)
         return PackageSandbox().context(record.manifest)
 
     @staticmethod
