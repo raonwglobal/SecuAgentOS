@@ -3,22 +3,21 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "secuagent"
-version = "0.1.0"
-description = "Security-focused AgentOS library for building secure AI agents"
+name = "secuagentos"
+version = "0.2.0"
+description = "Security-focused Agent Operating System library with a policy-controlled extension architecture"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "SecuAgent Team", email = "info@raonwglobal.com"}
 ]
-keywords = ["security", "agent", "ai", "cybersecurity", "threat-detection"]
+keywords = ["security", "agentos", "agent", "ai", "cybersecurity", "threat-detection", "edr", "siem", "soar"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -42,9 +41,12 @@ dev = [
     "mypy>=1.5.0",
 ]
 
+[project.entry-points."secuagentos.agents"]
+# Third-party packages register an AgentSpec provider in this group.
+
 [project.urls]
-Homepage = "https://github.com/raonwglobal/SecuAgent"
-Repository = "https://github.com/raonwglobal/SecuAgent"
+Homepage = "https://github.com/raonwglobal/SecuAgentOS"
+Repository = "https://github.com/raonwglobal/SecuAgentOS"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -52,14 +54,14 @@ include = ["secuagent*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py39', 'py310', 'py311', 'py312']
+target-version = ['py310', 'py311', 'py312']
 
 [tool.ruff]
 line-length = 100
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
