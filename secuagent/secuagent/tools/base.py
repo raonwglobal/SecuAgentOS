@@ -1,6 +1,7 @@
 """Tool-provider SPI used to connect external security products to AgentOS."""
 
 from abc import ABC, abstractmethod
+from importlib.metadata import entry_points
 from typing import Any, Dict
 
 
@@ -22,7 +23,9 @@ class SecurityTool(ABC):
 
 
 class ToolRegistry:
-    """Registry for external security tool adapters."""
+    """Registry for built-in and third-party security-tool adapters."""
+
+    ENTRY_POINT_GROUP = "secuagentos.tools"
 
     def __init__(self) -> None:
         self._tools: Dict[str, SecurityTool] = {}
@@ -40,6 +43,24 @@ class ToolRegistry:
 
     def list(self) -> tuple[SecurityTool, ...]:
         return tuple(self._tools.values())
+
+    def load_installed_packages(self) -> list[str]:
+        """Load SecurityTool providers exposed by installed Python packages."""
+        loaded: list[str] = []
+        discovered = entry_points()
+        group = (
+            discovered.select(group=self.ENTRY_POINT_GROUP)
+            if hasattr(discovered, "select")
+            else discovered.get(self.ENTRY_POINT_GROUP, [])
+        )
+        for ep in group:
+            provider = ep.load()
+            tool = provider() if callable(provider) else provider
+            if not isinstance(tool, SecurityTool):
+                raise TypeError(f"Entry point '{ep.name}' did not provide SecurityTool")
+            self.register(tool)
+            loaded.append(tool.name)
+        return loaded
 
 
 class ToolGateway:
