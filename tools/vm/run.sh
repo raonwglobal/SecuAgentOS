@@ -10,13 +10,14 @@ command -v qemu-system-x86_64 >/dev/null 2>&1 || { echo "missing required comman
 OVMF_CODE="${OVMF_CODE:-}"
 if [ -z "$OVMF_CODE" ]; then
   for candidate in \
+    /usr/share/OVMF/OVMF_CODE_4M.fd \
     /usr/share/OVMF/OVMF_CODE.fd \
     /usr/share/edk2/ovmf/OVMF_CODE.fd \
     /opt/homebrew/share/qemu/edk2-x86_64-code.fd \
     /usr/local/share/qemu/edk2-x86_64-code.fd; do
     if [ -f "$candidate" ]; then OVMF_CODE="$candidate"; break; fi
   done
-done
+fi
 
 [ -n "$OVMF_CODE" ] && [ -f "$OVMF_CODE" ] || { echo "OVMF_CODE not found; set OVMF_CODE=/path/to/OVMF_CODE.fd" >&2; exit 1; }
 
@@ -29,6 +30,4 @@ exec qemu-system-x86_64 \
   -cdrom "$ISO" \
   -nographic \
   -serial mon:stdio \
-  -no-reboot \
-  -nodefaults \
-  -device virtio-rng-pci
+  -no-reboot
