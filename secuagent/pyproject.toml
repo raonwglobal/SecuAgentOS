@@ -42,7 +42,10 @@ dev = [
 ]
 
 [project.entry-points."secuagentos.agents"]
-# Third-party packages register an AgentSpec provider in this group.
+# Third-party packages expose a provider returning AgentSpec.
+
+[project.entry-points."secuagentos.tools"]
+# Third-party packages expose a provider returning SecurityTool.
 
 [project.urls]
 Homepage = "https://github.com/raonwglobal/SecuAgentOS"
