@@ -1,0 +1,51 @@
+name: x86-64 VM Bootstrap
+
+on:
+  push:
+    branches:
+      - architecture/x86-64-vm-v1
+  pull_request:
+
+jobs:
+  vm-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install VM build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cpio grub-common grub-efi-amd64-bin qemu-system-x86 ovmf xorriso
+
+      - name: Static smoke contract
+        run: sh tests/vm/smoke.sh
+
+      - name: Build UEFI VM artifact
+        run: sh tools/vm/build.sh
+
+      - name: Boot VM and capture serial log
+        run: |
+          set +e
+          timeout 60s sh tools/vm/run.sh > vm-boot.log 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -ne 124 ]; then
+            echo "QEMU exited unexpectedly with code $rc"
+            cat vm-boot.log
+            exit "$rc"
+          fi
+          grep -q 'SECUAGENTOS_STATE=FOUNDATION_READY' vm-boot.log
+          grep -q 'SECUAGENTOS_STATE=SECURITY_READY' vm-boot.log
+          grep -q 'SECUAGENTOS_STATE=SERVICES_READY' vm-boot.log
+          grep -q 'SECUAGENTOS_STATE=RUNTIME_READY' vm-boot.log
+          grep -q 'SECUAGENTOS_STATE=SYSTEM_READY' vm-boot.log
+          grep -q 'SECUAGENTOS_HEALTH=READY' vm-boot.log
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secuagentos-vm-boot-log
+          path: vm-boot.log
