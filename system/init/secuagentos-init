@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+STATE_DIR=/run/secuagentos
+LOG_FILE="$STATE_DIR/boot.log"
+HEALTH_FILE="$STATE_DIR/health"
+mkdir -p "$STATE_DIR"
+
+log() {
+  printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" | tee -a "$LOG_FILE"
+}
+
+requested_failure=""
+for arg in $(cat /proc/cmdline 2>/dev/null || true); do
+  case "$arg" in
+    secuagentos.fail=*) requested_failure="${arg#*=}" ;;
+  esac
+done
+
+transition() {
+  state="$1"
+  log "SECUAGENTOS_STATE=$state"
+  printf '%s\n' "$state" > "$STATE_DIR/state"
+  if [ "$requested_failure" = "$state" ]; then
+    log "SECUAGENTOS_FAILURE_INJECTED=$state"
+    printf 'status=FAILED\nstate=%s\n' "$state" > "$HEALTH_FILE"
+    exec sh
+  fi
+}
+
+transition FOUNDATION_READY
+transition SECURITY_READY
+transition SERVICES_READY
+transition RUNTIME_READY
+transition SYSTEM_READY
+
+printf 'status=READY\nstate=SYSTEM_READY\n' > "$HEALTH_FILE"
+log "SECUAGENTOS_HEALTH=READY"
+
+# PID 1 remains alive so the prototype has a stable lifecycle anchor.
+while :; do
+  sleep 3600
+done
