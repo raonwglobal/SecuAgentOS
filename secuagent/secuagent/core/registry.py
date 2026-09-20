@@ -1,7 +1,8 @@
 """Agent and provider registries for SecuAgentOS."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Optional, Type
+from importlib.metadata import entry_points
+from typing import Any, Dict, Iterable, Type
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,9 @@ class AgentSpec:
 
 
 class AgentRegistry:
-    """In-process registry; persistent/distributed registries can implement the same contract later."""
+    """Registry for built-in and third-party AgentOS packages."""
+
+    ENTRY_POINT_GROUP = "secuagentos.agents"
 
     def __init__(self) -> None:
         self._agents: Dict[str, AgentSpec] = {}
@@ -44,3 +47,21 @@ class AgentRegistry:
 
     def create(self, name: str, **kwargs: Any) -> Any:
         return self.get(name).agent_class(**kwargs)
+
+    def load_installed_packages(self) -> list[str]:
+        """Load AgentSpec providers published by installed Python packages."""
+        loaded: list[str] = []
+        discovered = entry_points()
+        group = (
+            discovered.select(group=self.ENTRY_POINT_GROUP)
+            if hasattr(discovered, "select")
+            else discovered.get(self.ENTRY_POINT_GROUP, [])
+        )
+        for ep in group:
+            provider = ep.load()
+            spec = provider() if callable(provider) else provider
+            if not isinstance(spec, AgentSpec):
+                raise TypeError(f"Entry point '{ep.name}' did not provide AgentSpec")
+            self.register(spec)
+            loaded.append(spec.name)
+        return loaded
