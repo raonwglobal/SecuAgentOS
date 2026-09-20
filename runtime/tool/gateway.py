@@ -36,10 +36,12 @@ class ToolGateway:
         self,
         controller: SecurityController,
         principal_allowed: Callable[[str], bool] | None = None,
+        capability_provider: Callable[[str], frozenset[str]] | None = None,
     ) -> None:
         self._controller = controller
         self._adapters: dict[str, tuple[str, ToolAdapter, ToolVerifier | None]] = {}
         self._principal_allowed = principal_allowed or (lambda principal: True)
+        self._capability_provider = capability_provider
 
     def register(
         self,
@@ -75,12 +77,17 @@ class ToolGateway:
             return ToolResponse(request.request_id, False, error="unknown_tool")
 
         required_capability, adapter, verifier = entry
+        capabilities = (
+            self._capability_provider(request.principal)
+            if self._capability_provider is not None
+            else request.capabilities
+        )
         security_request = SecurityRequest(
             request_id=request.request_id,
             principal=request.principal,
             action=request.action,
             resource=request.resource,
-            capabilities=request.capabilities,
+            capabilities=capabilities,
             context=request.context,
         )
         decision = self._controller.authorize(
