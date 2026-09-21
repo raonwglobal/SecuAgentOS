@@ -4,10 +4,13 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 OUT_DIR="${ROOT_DIR}/.build/vm"
 WORK_DIR="${OUT_DIR}/work"
+# The versioned Alpine netboot directory is published, but individual boot
+# assets can be rotated independently.  Use the maintained stable netboot
+# endpoint by default and allow CI/local tests to pin an exact base explicitly.
 ALPINE_VERSION="${ALPINE_VERSION:-3.24.2}"
-ALPINE_BASE="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/netboot-${ALPINE_VERSION}"
-KERNEL_URL="${ALPINE_BASE}/vmlinuz-lts"
-INITRAMFS_URL="${ALPINE_BASE}/initramfs-lts"
+ALPINE_NETBOOT_BASE="${ALPINE_NETBOOT_BASE:-https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot}"
+KERNEL_URL="${ALPINE_NETBOOT_BASE}/vmlinuz-lts"
+INITRAMFS_URL="${ALPINE_NETBOOT_BASE}/initramfs-lts"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
 need curl
@@ -15,13 +18,21 @@ need cpio
 need gzip
 need grub-mkrescue
 need xorriso
+need sha256sum
 
 rm -rf "$OUT_DIR"
 mkdir -p "$WORK_DIR/initramfs" "$WORK_DIR/iso/boot/grub"
 
-echo "Downloading Alpine ${ALPINE_VERSION} x86_64 netboot assets..."
-curl -fsSL "$KERNEL_URL" -o "$WORK_DIR/iso/boot/vmlinuz"
-curl -fsSL "$INITRAMFS_URL" -o "$WORK_DIR/initramfs.base"
+echo "Downloading Alpine x86_64 netboot assets..."
+echo "Alpine compatibility target: ${ALPINE_VERSION}"
+echo "Netboot source: ${ALPINE_NETBOOT_BASE}"
+# Fail early with a useful diagnostic instead of producing a later gzip/GRUB error.
+curl -fsSI "$KERNEL_URL" >/dev/null
+curl -fsSI "$INITRAMFS_URL" >/dev/null
+curl -fsSL --retry 3 --retry-delay 2 "$KERNEL_URL" -o "$WORK_DIR/iso/boot/vmlinuz"
+curl -fsSL --retry 3 --retry-delay 2 "$INITRAMFS_URL" -o "$WORK_DIR/initramfs.base"
+[ -s "$WORK_DIR/iso/boot/vmlinuz" ] || { echo "empty Alpine kernel asset" >&2; exit 1; }
+[ -s "$WORK_DIR/initramfs.base" ] || { echo "empty Alpine initramfs asset" >&2; exit 1; }
 
 gzip -dc "$WORK_DIR/initramfs.base" | (cd "$WORK_DIR/initramfs" && cpio -idm --quiet)
 cp "$ROOT_DIR/system/init/secuagentos-init" "$WORK_DIR/initramfs/init"
@@ -34,4 +45,4 @@ printf '%s\n' "menuentry 'SecuAgentOS x86-64 VM' {" "  linux /boot/vmlinuz conso
 
 grub-mkrescue -o "$OUT_DIR/secuagentos-x86_64-uefi.iso" "$WORK_DIR/iso" >/dev/null
 sha256sum "$OUT_DIR/secuagentos-x86_64-uefi.iso" > "$OUT_DIR/secuagentos-x86_64-uefi.iso.sha256"
-printf '%s\n' "Built: $OUT_DIR/secuagentos-x86_64-uefi.iso" "Alpine base: $ALPINE_VERSION"
+printf '%s\n' "Built: $OUT_DIR/secuagentos-x86_64-uefi.iso" "Alpine compatibility target: $ALPINE_VERSION" "Netboot source: $ALPINE_NETBOOT_BASE"
