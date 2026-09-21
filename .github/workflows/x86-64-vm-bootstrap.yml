@@ -27,7 +27,12 @@ jobs:
           command -v mformat
           command -v xorriso
           command -v qemu-system-x86_64
-          test -f /usr/share/OVMF/OVMF_CODE_4M.fd || test -f /usr/share/OVMF/OVMF_CODE.fd
+          test -f /usr/share/qemu/OVMF.fd || test -f /usr/share/OVMF/OVMF_CODE_4M.fd || test -f /usr/share/OVMF/OVMF_CODE.fd
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            echo "KVM available"
+          else
+            echo "KVM unavailable; CI will use QEMU TCG"
+          fi
 
       - name: Static smoke contract
         run: sh tests/vm/smoke.sh
@@ -42,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          timeout 60s sh tools/vm/run.sh > vm-boot.log 2>&1
+          timeout 120s sh tools/vm/run.sh > vm-boot.log 2>&1
           rc=$?
           set -e
           if [ "$rc" -ne 124 ]; then
