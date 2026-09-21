@@ -5,7 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 OUT_DIR="${ROOT_DIR}/.build/vm"
 WORK_DIR="${OUT_DIR}/work"
 # The versioned Alpine netboot directory is published, but individual boot
-# assets can be rotated independently.  Use the maintained stable netboot
+# assets can be rotated independently. Use the maintained stable netboot
 # endpoint by default and allow CI/local tests to pin an exact base explicitly.
 ALPINE_VERSION="${ALPINE_VERSION:-3.24.2}"
 ALPINE_NETBOOT_BASE="${ALPINE_NETBOOT_BASE:-https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot}"
@@ -17,6 +17,7 @@ need curl
 need cpio
 need gzip
 need grub-mkrescue
+need mformat
 need xorriso
 need sha256sum
 
