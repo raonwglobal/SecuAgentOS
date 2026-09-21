@@ -10,7 +10,7 @@ on:
 jobs:
   vm-bootstrap:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,9 +24,13 @@ jobs:
         run: sh tests/vm/smoke.sh
 
       - name: Build UEFI VM artifact
-        run: sh tools/vm/build.sh
+        shell: bash
+        run: |
+          set -o pipefail
+          sh tools/vm/build.sh 2>&1 | tee vm-build.log
 
       - name: Boot VM and capture serial log
+        shell: bash
         run: |
           set +e
           timeout 60s sh tools/vm/run.sh > vm-boot.log 2>&1
@@ -44,9 +48,13 @@ jobs:
           grep -q 'SECUAGENTOS_STATE=SYSTEM_READY' vm-boot.log
           grep -q 'SECUAGENTOS_HEALTH=READY' vm-boot.log
 
-      - name: Upload boot log
+      - name: Upload VM diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: secuagentos-vm-boot-log
-          path: vm-boot.log
+          name: secuagentos-vm-diagnostics
+          path: |
+            vm-build.log
+            vm-boot.log
+            .build/vm/*.sha256
+          if-no-files-found: warn
