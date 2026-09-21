@@ -1,0 +1,81 @@
+from kernel.security.control import MemoryAuditSink, SecurityController, StaticPolicy
+from runtime.agent.runtime import AgentRuntime, AgentState
+from runtime.integration.application import ApplicationRuntime
+from runtime.package.manager import PackageManager, PackageManifest
+
+class Trust:
+    def verify(self, manifest): return True
+
+class Runtime:
+    def compatible(self, minimum_version): return True
+
+class Adapter:
+    def __init__(self): self.calls = 0
+    def execute(self, request):
+        self.calls += 1
+        return {"status": "ok"}
+
+def make_package_manager():
+    return PackageManager(Trust(), Runtime(), MemoryAuditSink())
+
+def install_package(pm, manifest):
+    pm.discover(manifest)
+    pm.verify(manifest.name)
+    pm.stage(manifest.name)
+    pm.install(manifest.name)
+    pm.activate(manifest.name)
+
+def test_activated_package_drives_agent_and_tool_authority():
+    pm = make_package_manager()
+    manifest = PackageManifest(
+        "secuagent", "1.0.0", "security-application", "0.5.0",
+        frozenset({"event.read"}), frozenset({"event.read"}),
+        frozenset({"siem.query"})
+    )
+    install_package(pm, manifest)
+    agents = AgentRuntime(pm)
+    app = ApplicationRuntime(pm, agents)
+    app.activate_agent("agent:secuagent", "secuagent")
+
+    audit = MemoryAuditSink()
+    controller = SecurityController(StaticPolicy({"event.read"}), audit)
+    gateway = __import__("runtime.tool.gateway", fromlist=["ToolGateway"]).ToolGateway(
+        controller,
+        principal_allowed=app.is_executable,
+        capability_provider=app.capabilities_for,
+    )
+    adapter = Adapter()
+    gateway.register("siem.query", "event.read", adapter)
+
+    # Caller attempts to inject an undeclared capability; authoritative
+    # package/runtime capabilities must win.
+    from runtime.tool.gateway import ToolRequest
+    response = gateway.execute(ToolRequest(
+        "r1", "agent:secuagent", "siem.query", "event.read", "target",
+        frozenset({"event.read", "firewall.block"})
+    ))
+    assert response.success
+    assert adapter.calls == 1
+
+    agents.quarantine("agent:secuagent")
+    denied = gateway.execute(ToolRequest(
+        "r2", "agent:secuagent", "siem.query", "event.read", "target",
+        frozenset({"event.read"})
+    ))
+    assert not denied.success
+    assert denied.error == "principal_not_allowed"
+    assert adapter.calls == 1
+
+def test_unactivated_package_cannot_register_agent():
+    pm = make_package_manager()
+    pm.discover(PackageManifest(
+        "secuagent", "1.0.0", "security-application", "0.5.0",
+        frozenset({"event.read"})
+    ))
+    agents = AgentRuntime(pm)
+    try:
+        agents.register_package_agent("agent:secuagent", "secuagent")
+    except PermissionError as exc:
+        assert str(exc) == "package_not_activated"
+    else:
+        raise AssertionError("inactive package must not register")
