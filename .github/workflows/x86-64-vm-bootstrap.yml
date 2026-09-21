@@ -18,7 +18,16 @@ jobs:
       - name: Install VM build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cpio grub-common grub-efi-amd64-bin qemu-system-x86 ovmf xorriso
+          sudo apt-get install -y cpio grub-common grub-efi-amd64-bin mtools qemu-system-x86 ovmf xorriso
+
+      - name: Verify VM build dependencies
+        run: |
+          set -eu
+          command -v grub-mkrescue
+          command -v mformat
+          command -v xorriso
+          command -v qemu-system-x86_64
+          test -f /usr/share/OVMF/OVMF_CODE_4M.fd || test -f /usr/share/OVMF/OVMF_CODE.fd
 
       - name: Static smoke contract
         run: sh tests/vm/smoke.sh
