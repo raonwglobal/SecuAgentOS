@@ -5,7 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 OUT_DIR="${ROOT_DIR}/.build/vm"
 WORK_DIR="${OUT_DIR}/work"
 ALPINE_VERSION="${ALPINE_VERSION:-3.24.2}"
-ALPINE_BASE="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/netboot"
+ALPINE_BASE="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/x86_64/netboot-${ALPINE_VERSION}"
 KERNEL_URL="${ALPINE_BASE}/vmlinuz-lts"
 INITRAMFS_URL="${ALPINE_BASE}/initramfs-lts"
 
@@ -19,10 +19,10 @@ need xorriso
 rm -rf "$OUT_DIR"
 mkdir -p "$WORK_DIR/initramfs" "$WORK_DIR/iso/boot/grub"
 
+echo "Downloading Alpine ${ALPINE_VERSION} x86_64 netboot assets..."
 curl -fsSL "$KERNEL_URL" -o "$WORK_DIR/iso/boot/vmlinuz"
 curl -fsSL "$INITRAMFS_URL" -o "$WORK_DIR/initramfs.base"
 
-mkdir -p "$WORK_DIR/initramfs"
 gzip -dc "$WORK_DIR/initramfs.base" | (cd "$WORK_DIR/initramfs" && cpio -idm --quiet)
 cp "$ROOT_DIR/system/init/secuagentos-init" "$WORK_DIR/initramfs/init"
 chmod 0755 "$WORK_DIR/initramfs/init"
