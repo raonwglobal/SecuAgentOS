@@ -3,6 +3,7 @@ name: x86-64 VM Bootstrap
 on:
   push:
     branches:
+      - main
       - architecture/x86-64-vm-v1
   pull_request:
 
