@@ -1,59 +1,216 @@
-# Luna Chat Coder
+# SecuAgentOS
 
-[한국어 README](README.ko.md)
+**Security-focused Agent Operating System for x86-64 hardware and virtual machines**
 
-**Version 0.1.5**
+SecuAgentOS is the foundation layer for a security-specialized Agent OS. The goal is not to create another standalone security application or Python package, but to provide an OS/runtime platform on which independently packaged security agents and external security solutions can be installed, isolated, authorized, observed, and orchestrated.
 
-Use ordinary ChatGPT Web conversations for real GitHub repository work—without running a local coding agent, opening a tunnel, or giving the chat access to your computer.
+> **Design principle:** SecuAgentOS is the platform. `SecuAgent` and other security applications are installable packages that run on the platform.
 
-ChatGPT already has a sandbox that can run code. The catch is that network restrictions can stop repository work when the chat needs source, dependencies, or a reliable way to publish a larger change. Luna teaches the model to keep the development loop in that built-in sandbox and use connected GitHub access only for the missing pieces.
+## Project Status
 
-## What you get
+Current development baseline:
 
-- **A useful built-in workspace.** Editing, building, testing, and debugging stay in the chat sandbox whenever it can do the job.
-- **Fewer dead ends.** If the normal path cannot complete a step reliably, Luna can use GitHub for that step instead of giving up or moving the whole workflow elsewhere.
-- **Safer recovery.** If the chat or sandbox disappears, Luna resumes from exact GitHub state rather than trying to recreate code from conversation history.
-- **Reliable handoff.** After substantial work on repository files, Luna can give you a complete sandbox workspace snapshot when the chat supports direct file downloads, while still checking the state it publishes before reporting completion.
+- x86-64 hardware/VM architecture defined
+- UEFI/QEMU bootstrap foundation implemented
+- Security Control Plane and policy enforcement primitives implemented
+- Agent Runtime lifecycle implemented
+- Package Manager and application sandbox contract implemented
+- Package → Agent Runtime → Tool Gateway integration implemented
+- Tool Gateway provides the controlled boundary to external security tools
+- VM smoke/build/boot workflow implemented in GitHub Actions
+- `SecuAgent` application packaging is the next integration milestone
 
-The point is simple: give the chat a repository and a development task, not a new piece of infrastructure to operate.
+This is an active development prototype, not a production-ready security OS.
 
-## Quick start
-
-For the ChatGPT Web setup documented here:
-
-1. Choose **Use this template → Create a new repository**.
-2. In ChatGPT, install/connect the **GitHub Plugin** from <https://chatgpt.com/plugins>.
-3. On GitHub, install the **ChatGPT Codex Connector** from <https://github.com/apps/chatgpt-codex-connector> and grant it access to the new repository. If the App is already installed for selected repositories, add the new repository to that list.
-4. In a normal ChatGPT conversation, send the repository URL and the development task—for example, ask it to implement a change and open a pull request.
-
-That is the normal workflow. A repository created from this template already contains Luna, and you should not need to mention Luna by name or manage its internal recovery steps yourself.
-
-Organization policy may require an administrator to approve the Plugin or GitHub App.
-
-## How it works
-
-Luna reads the repository's own instructions and requirements, recovers the exact source it should work from, and uses the chat sandbox for the normal edit/test loop.
-
-When direct sandbox access is not enough, Luna can use the connected GitHub path for the missing step. If that path still cannot complete the step reliably, a bounded GitHub Actions run can handle it, then return the work to the sandbox when possible. GitHub Actions is not the default coding environment.
-
-## Add Luna to an existing repository
-
-Copy the complete skill directory:
+## Architecture
 
 ```text
-.agents/skills/luna-chat-coder/
+┌──────────────────────────────────────────────────────────────┐
+│                         Hardware                             │
+│                    x86-64 / VM / QEMU                       │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+┌─────────────────────────────▼────────────────────────────────┐
+│                      SecuAgentOS                             │
+│                                                              │
+│  Boot / Foundation                                           │
+│  ├─ Hardware & VM abstraction                                │
+│  ├─ OS initialization                                        │
+│  └─ Health / lifecycle                                       │
+│                                                              │
+│  Security Control Plane                                      │
+│  ├─ Identity / Principal                                     │
+│  ├─ Policy                                                   │
+│  ├─ Capability                                               │
+│  ├─ Risk / Approval                                          │
+│  └─ Audit                                                    │
+│                                                              │
+│  Agent Runtime                                               │
+│  ├─ Agent lifecycle                                          │
+│  ├─ Task execution                                           │
+│  └─ Quarantine / failure handling                            │
+│                                                              │
+│  Application Platform                                        │
+│  ├─ Package Manager                                          │
+│  ├─ Trust verification                                       │
+│  ├─ Sandbox contract                                         │
+│  └─ Package lifecycle                                        │
+│                                                              │
+│  Tool Gateway                                                │
+│  └─ Controlled access to SIEM / EDR / IAM / FW / etc.       │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+                 ┌────────────▼────────────┐
+                 │ Security Applications  │
+                 │                         │
+                 │ SecuAgent               │
+                 │ EDR / SIEM Agents      │
+                 │ IAM / FW Agents        │
+                 │ Other Security Apps    │
+                 └─────────────────────────┘
 ```
 
-Then merge the short Luna entry-point instruction from [`AGENTS.md`](AGENTS.md) into the repository's existing agent instructions. Keep the project's own engineering guidance; Luna works around it rather than replacing it.
+## Application Model
 
-For the documented ChatGPT Web path, connect the GitHub Plugin and grant the ChatGPT Codex Connector access to the repository before asking the chat to work on it.
+Applications are not part of the OS core merely because they provide security functionality. They are packages with an explicit manifest and lifecycle:
 
-## Documentation
+```text
+DISCOVERED
+    ↓
+VERIFIED
+    ↓
+STAGED
+    ↓
+INSTALLED
+    ↓
+ACTIVATED
+    ↓
+RUNNING
+```
 
-Runtime behavior lives in [`SKILL.md`](.agents/skills/luna-chat-coder/SKILL.md). Operational details are in [`actions-missions.md`](.agents/skills/luna-chat-coder/references/actions-missions.md) and [`recovery.md`](.agents/skills/luna-chat-coder/references/recovery.md). [`design-rationale.md`](.agents/skills/luna-chat-coder/references/design-rationale.md) is maintainer memory for changing Luna itself; normal skill use does not depend on it.
+A package cannot become active until trust and runtime compatibility checks succeed. Agent capabilities originate from the package manifest and are not accepted from an untrusted caller.
 
-Luna follows the Agent Skills structure. ChatGPT Web is the path documented and tested here; another host can use the same skill when it provides equivalent sandbox and GitHub capabilities.
+The intended future CLI model is:
+
+```text
+sos search secuagent
+sos install secuagent
+sos verify secuagent
+sos enable secuagent
+sos disable secuagent
+sos update secuagent
+sos rollback secuagent
+```
+
+## Security Execution Path
+
+External security systems are accessed through a controlled path rather than direct application calls:
+
+```text
+Application Package
+      ↓
+Agent Runtime
+      ↓
+Authoritative Capability Resolution
+      ↓
+Security Control Plane
+      ↓
+Policy / Risk / Approval
+      ↓
+Tool Gateway
+      ↓
+Tool Adapter
+      ↓
+Result Verification
+      ↓
+Audit
+```
+
+This is intended to prevent capability spoofing, unauthorized tool execution, package bypasses, and execution by quarantined agents.
+
+## VM Development Environment
+
+The current development target is **x86-64** with QEMU/UEFI virtualization. The repository contains scripts for building and running the VM bootstrap artifact:
+
+```text
+./tools/vm/build.sh
+./tools/vm/run.sh
+./tools/vm/health-check.sh
+```
+
+The GitHub Actions workflow validates the bootstrap path using an Ubuntu runner, builds the UEFI artifact, boots it with QEMU, captures the serial console, and verifies the SecuAgentOS lifecycle states.
+
+Alpine Linux is currently used as the lightweight bootstrap base for the VM prototype. The project does not treat Alpine as the final SecuAgentOS architecture; it is a development/bootstrap substrate.
+
+## Repository Structure
+
+```text
+SecuAgentOS/
+├── docs/dev/                 # Architecture and development records
+├── kernel/security/          # Security control-plane primitives
+├── runtime/                  # Agent, package, tool and integration runtime
+│   ├── agent/
+│   ├── package/
+│   ├── tool/
+│   └── integration/
+├── system/init/              # SecuAgentOS initialization
+├── tools/vm/                 # x86-64 VM build/run helpers
+├── tests/vm/                 # VM smoke tests
+└── .github/workflows/        # CI/VM validation
+```
+
+## Development Documentation
+
+Development decisions and architecture definitions are maintained under `docs/dev/`. This is the authoritative project-development documentation location.
+
+Important areas include:
+
+- OS architecture and x86-64 virtualization
+- boot and lifecycle design
+- security control plane
+- Agent Runtime
+- package management and sandboxing
+- Tool Gateway
+- package/runtime/tool integration
+- VM testing and CI
+
+## SecuAgent Separation
+
+The repository `raonwglobal/SecuAgent` represents a security application/rule package direction. It must not be treated as the SecuAgentOS kernel or OS runtime.
+
+The intended relationship is:
+
+```text
+SecuAgentOS
+    └── installable application package
+            └── SecuAgent
+```
+
+Development-support tooling such as `luna-chat-coder` is not part of the SecuAgentOS runtime architecture. It may exist in the repository for development workflow support, but it is explicitly excluded from the OS/application runtime design.
+
+## Roadmap
+
+1. Stabilize x86-64 VM bootstrap and CI
+2. Complete process-level application isolation
+3. Implement signed package and publisher trust verification
+4. Implement `sos` package-management CLI
+5. Build the first installable `SecuAgent` package
+6. Add real SIEM/EDR/IAM/firewall adapters
+7. Add shared agent context and memory
+8. Add autonomous observation, diagnosis, remediation and verification loops
+9. Harden for physical x86-64 hardware
+10. Establish reproducible, signed OS/package release artifacts
+
+## Current Security Invariants
+
+- Unverified packages cannot be activated.
+- Incompatible packages cannot be activated.
+- Agent capabilities must match the package authority.
+- Tool requests cannot elevate capability by caller-supplied data.
+- Quarantined agents cannot use the Tool Gateway.
+- Tool execution is policy-controlled and auditable.
+- Application failure must not directly bypass the OS security control plane.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+The repository's existing license applies to the project unless a component explicitly states otherwise.
