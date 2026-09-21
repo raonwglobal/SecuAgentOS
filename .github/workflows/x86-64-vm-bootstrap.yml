@@ -1,12 +1,8 @@
 name: x86-64 VM Bootstrap
-
 on:
   push:
-    branches:
-      - main
-      - architecture/x86-64-vm-v1
+    branches: [main, architecture/x86-64-vm-v1]
   pull_request:
-
 jobs:
   vm-bootstrap:
     runs-on: ubuntu-latest
@@ -14,12 +10,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install VM build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cpio grub-common grub-efi-amd64-bin mtools qemu-system-x86 ovmf xorriso
-
       - name: Verify VM build dependencies
         run: |
           set -eu
@@ -27,22 +21,21 @@ jobs:
           command -v mformat
           command -v xorriso
           command -v qemu-system-x86_64
-          test -f /usr/share/qemu/OVMF.fd || test -f /usr/share/OVMF/OVMF_CODE_4M.fd || test -f /usr/share/OVMF/OVMF_CODE.fd
-          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
-            echo "KVM available"
-          else
-            echo "KVM unavailable; CI will use QEMU TCG"
-          fi
-
+          test -f /usr/share/OVMF/OVMF_CODE_4M.fd || test -f /usr/share/OVMF/OVMF_CODE.fd || test -f /usr/share/qemu/OVMF.fd
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo "KVM available"; else echo "KVM unavailable; CI will use QEMU TCG"; fi
       - name: Static smoke contract
         run: sh tests/vm/smoke.sh
-
       - name: Build UEFI VM artifact
         shell: bash
         run: |
           set -o pipefail
           sh tools/vm/build.sh 2>&1 | tee vm-build.log
-
+      - name: Inspect VM artifact
+        run: |
+          set -eu
+          test -s .build/vm/secuagentos-x86_64-uefi.iso
+          file .build/vm/secuagentos-x86_64-uefi.iso
+          sha256sum -c .build/vm/secuagentos-x86_64-uefi.iso.sha256
       - name: Boot VM and capture serial log
         shell: bash
         run: |
@@ -50,18 +43,16 @@ jobs:
           timeout 120s sh tools/vm/run.sh > vm-boot.log 2>&1
           rc=$?
           set -e
+          echo "========== VM BOOT LOG =========="
+          cat vm-boot.log
+          echo "========== END VM BOOT LOG =========="
           if [ "$rc" -ne 124 ]; then
             echo "QEMU exited unexpectedly with code $rc"
-            cat vm-boot.log
             exit "$rc"
           fi
-          grep -q 'SECUAGENTOS_STATE=FOUNDATION_READY' vm-boot.log
-          grep -q 'SECUAGENTOS_STATE=SECURITY_READY' vm-boot.log
-          grep -q 'SECUAGENTOS_STATE=SERVICES_READY' vm-boot.log
-          grep -q 'SECUAGENTOS_STATE=RUNTIME_READY' vm-boot.log
-          grep -q 'SECUAGENTOS_STATE=SYSTEM_READY' vm-boot.log
-          grep -q 'SECUAGENTOS_HEALTH=READY' vm-boot.log
-
+          for marker in             'SECUAGENTOS_STATE=FOUNDATION_READY'             'SECUAGENTOS_STATE=SECURITY_READY'             'SECUAGENTOS_STATE=SERVICES_READY'             'SECUAGENTOS_STATE=RUNTIME_READY'             'SECUAGENTOS_STATE=SYSTEM_READY'             'SECUAGENTOS_HEALTH=READY'; do
+            grep -q "$marker" vm-boot.log || { echo "Missing boot marker: $marker"; exit 1; }
+          done
       - name: Upload VM diagnostics
         if: always()
         uses: actions/upload-artifact@v4
