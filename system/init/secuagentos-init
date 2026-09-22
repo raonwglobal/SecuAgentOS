@@ -1,14 +1,30 @@
 #!/bin/sh
 set -eu
 
+# PID 1 runs inside the minimal initramfs. Do not assume the host/rootfs PATH.
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+umask 022
+
 STATE_DIR=/run/secuagentos
 LOG_FILE="$STATE_DIR/boot.log"
 HEALTH_FILE="$STATE_DIR/health"
+
+# Fail with a useful serial diagnostic if the initramfs contract is incomplete.
+for command in mkdir date tee cat sleep; do
+  command -v "$command" >/dev/null 2>&1 || {
+    printf 'SECUAGENTOS_BOOT_FAILURE=COMMAND_NOT_FOUND command=%s\n' "$command" >&2
+    exit 127
+  }
+done
+
 mkdir -p "$STATE_DIR"
 
 log() {
   printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" | tee -a "$LOG_FILE"
 }
+
+log "SECUAGENTOS_STATE=INIT_STARTED"
 
 requested_failure=""
 for arg in $(cat /proc/cmdline 2>/dev/null || true); do
