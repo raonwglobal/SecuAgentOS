@@ -4,9 +4,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 OUT_DIR="${ROOT_DIR}/.build/vm"
 WORK_DIR="${OUT_DIR}/work"
-# The versioned Alpine netboot directory is published, but individual boot
-# assets can be rotated independently. Use the maintained stable netboot
-# endpoint by default and allow CI/local tests to pin an exact base explicitly.
+# ALPINE_VERSION is compatibility metadata; ALPINE_NETBOOT_BASE controls the actual source.
 ALPINE_VERSION="${ALPINE_VERSION:-3.24.2}"
 ALPINE_NETBOOT_BASE="${ALPINE_NETBOOT_BASE:-https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot}"
 KERNEL_URL="${ALPINE_NETBOOT_BASE}/vmlinuz-lts"
@@ -27,7 +25,6 @@ mkdir -p "$WORK_DIR/initramfs" "$WORK_DIR/iso/boot/grub"
 echo "Downloading Alpine x86_64 netboot assets..."
 echo "Alpine compatibility target: ${ALPINE_VERSION}"
 echo "Netboot source: ${ALPINE_NETBOOT_BASE}"
-# Fail early with a useful diagnostic instead of producing a later gzip/GRUB error.
 curl -fsSI "$KERNEL_URL" >/dev/null
 curl -fsSI "$INITRAMFS_URL" >/dev/null
 curl -fsSL --retry 3 --retry-delay 2 "$KERNEL_URL" -o "$WORK_DIR/iso/boot/vmlinuz"
@@ -36,7 +33,28 @@ curl -fsSL --retry 3 --retry-delay 2 "$INITRAMFS_URL" -o "$WORK_DIR/initramfs.ba
 [ -s "$WORK_DIR/initramfs.base" ] || { echo "empty Alpine initramfs asset" >&2; exit 1; }
 
 gzip -dc "$WORK_DIR/initramfs.base" | (cd "$WORK_DIR/initramfs" && cpio -idm --quiet)
-cp "$ROOT_DIR/system/init/secuagentos-init" "$WORK_DIR/initramfs/init"
+
+# The replacement PID1 executes inside initramfs, not inside the GitHub runner.
+# Validate its shell syntax and the actual initramfs command contract before creating an ISO.
+INIT_SCRIPT="$ROOT_DIR/system/init/secuagentos-init"
+sh -n "$INIT_SCRIPT"
+[ -s "$INIT_SCRIPT" ] || { echo "empty SecuAgentOS PID1 script" >&2; exit 1; }
+[ -x "$WORK_DIR/initramfs/bin/busybox" ] || { echo "initramfs BusyBox is missing or not executable" >&2; exit 1; }
+
+for applet in sh mkdir date tee cat sleep; do
+  "$WORK_DIR/initramfs/bin/busybox" --list | grep -qx "$applet" || {
+    echo "initramfs BusyBox applet missing: $applet" >&2
+    exit 1
+  }
+done
+
+# Verify the command lookup contract used by PID1 without requiring a chroot.
+for path in bin/sh bin/busybox; do
+  [ -x "$WORK_DIR/initramfs/$path" ] || { echo "required initramfs executable missing: /$path" >&2; exit 1; }
+done
+
+echo "Initramfs PID1 contract: PASS"
+cp "$INIT_SCRIPT" "$WORK_DIR/initramfs/init"
 chmod 0755 "$WORK_DIR/initramfs/init"
 
 printf '%s\n' "set timeout=0" "set default=0" > "$WORK_DIR/iso/boot/grub/grub.cfg"
