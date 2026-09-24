@@ -5,8 +5,6 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 OUT_DIR="${ROOT_DIR}/.build/vm"
 WORK_DIR="${OUT_DIR}/work"
 
-# Ubuntu is the SecuAgentOS development/runtime base for the x86-64 prototype.
-# Pin the release family and a published image revision instead of using a moving latest endpoint.
 UBUNTU_RELEASE="${UBUNTU_RELEASE:-24.04}"
 UBUNTU_IMAGE_VERSION="${UBUNTU_IMAGE_VERSION:-20260911}"
 UBUNTU_IMAGE_BASE="${UBUNTU_IMAGE_BASE:-https://cloud-images.ubuntu.com/releases/releases/noble/release-${UBUNTU_IMAGE_VERSION}}"
@@ -55,8 +53,8 @@ EOF
 
 cat > "$WORK_DIR/seed/user-data" <<'EOF'
 #cloud-config
-# cloud-init is provisioning only. It installs and enables the OS-native
-# systemd unit; the SecuAgentOS lifecycle itself is owned by systemd.
+# cloud-init is provisioning only. It installs the OS-native systemd unit.
+# SecuAgentOS lifecycle/state is owned by systemd, not by cloud-init itself.
 write_files:
   - path: /usr/local/sbin/secuagentos-bootstrap
     permissions: '0755'
@@ -66,19 +64,21 @@ write_files:
       STATE_DIR=/run/secuagentos
       LOG_FILE="$STATE_DIR/boot.log"
       mkdir -p "$STATE_DIR"
-      log() { printf '%s\n' "$*" | tee -a "$LOG_FILE" /dev/ttyS0; }
-      log 'SECUAGENTOS_STATE=INIT_STARTED'
-      printf '%s\n' 'INIT_STARTED' > "$STATE_DIR/state"
-      log 'SECUAGENTOS_STATE=FOUNDATION_READY'
-      printf '%s\n' 'FOUNDATION_READY' > "$STATE_DIR/state"
-      log 'SECUAGENTOS_STATE=SECURITY_READY'
-      printf '%s\n' 'SECURITY_READY' > "$STATE_DIR/state"
-      log 'SECUAGENTOS_STATE=SERVICES_READY'
-      printf '%s\n' 'SERVICES_READY' > "$STATE_DIR/state"
-      log 'SECUAGENTOS_STATE=RUNTIME_READY'
-      printf '%s\n' 'RUNTIME_READY' > "$STATE_DIR/state"
-      log 'SECUAGENTOS_STATE=SYSTEM_READY'
-      printf '%s\n' 'SYSTEM_READY' > "$STATE_DIR/state"
+      log() {
+        printf '%s\n' "$*" | tee -a "$LOG_FILE"
+        printf '%s\n' "$*" > /dev/ttyS0 2>/dev/null || true
+      }
+      transition() {
+        state="$1"
+        log "SECUAGENTOS_STATE=$state"
+        printf '%s\n' "$state" > "$STATE_DIR/state"
+      }
+      transition INIT_STARTED
+      transition FOUNDATION_READY
+      transition SECURITY_READY
+      transition SERVICES_READY
+      transition RUNTIME_READY
+      transition SYSTEM_READY
       printf '%s\n' 'status=READY' > "$STATE_DIR/health"
       log 'SECUAGENTOS_HEALTH=READY'
 
@@ -102,9 +102,9 @@ write_files:
       WantedBy=multi-user.target
 
 runcmd:
-  - systemctl daemon-reload
-  - systemctl enable secuagentos-bootstrap.service
-  - systemctl start secuagentos-bootstrap.service
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, secuagentos-bootstrap.service]
+  - [systemctl, start, --no-block, secuagentos-bootstrap.service]
 EOF
 
 xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
