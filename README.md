@@ -11,6 +11,7 @@ SecuAgentOS is the foundation layer for a security-specialized Agent OS. The goa
 Current development baseline:
 
 - x86-64 hardware/VM architecture defined
+- Ubuntu Server 24.04 LTS guest baseline selected for the x86-64 prototype
 - UEFI/QEMU bootstrap foundation implemented
 - Security Control Plane and policy enforcement primitives implemented
 - Agent Runtime lifecycle implemented
@@ -31,44 +32,35 @@ This is an active development prototype, not a production-ready security OS.
 └─────────────────────────────┬────────────────────────────────┘
                               │
 ┌─────────────────────────────▼────────────────────────────────┐
+│                 Ubuntu Linux Foundation                      │
+│  UEFI / Kernel / systemd / Device / Filesystem / Networking │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+┌─────────────────────────────▼────────────────────────────────┐
 │                      SecuAgentOS                             │
 │                                                              │
-│  Boot / Foundation                                           │
-│  ├─ Hardware & VM abstraction                                │
-│  ├─ OS initialization                                        │
-│  └─ Health / lifecycle                                       │
-│                                                              │
-│  Security Control Plane                                      │
-│  ├─ Identity / Principal                                     │
-│  ├─ Policy                                                   │
-│  ├─ Capability                                               │
-│  ├─ Risk / Approval                                          │
-│  └─ Audit                                                    │
-│                                                              │
-│  Agent Runtime                                               │
-│  ├─ Agent lifecycle                                          │
-│  ├─ Task execution                                           │
-│  └─ Quarantine / failure handling                            │
-│                                                              │
-│  Application Platform                                        │
-│  ├─ Package Manager                                          │
-│  ├─ Trust verification                                       │
-│  ├─ Sandbox contract                                         │
-│  └─ Package lifecycle                                        │
-│                                                              │
-│  Tool Gateway                                                │
-│  └─ Controlled access to SIEM / EDR / IAM / FW / etc.       │
+│  OS / Security Foundation                                    │
+│  ├─ System lifecycle / health                               │
+│  ├─ Security Control Plane                                  │
+│  ├─ Identity / Policy / Capability / Risk / Audit            │
+│  ├─ Event / Context services                                │
+│  ├─ Agent Runtime                                           │
+│  ├─ Package Manager                                         │
+│  └─ Tool Gateway                                            │
 └─────────────────────────────┬────────────────────────────────┘
                               │
                  ┌────────────▼────────────┐
-                 │ Security Applications  │
+                 │ Installable Security    │
+                 │ Applications / Packages │
                  │                         │
                  │ SecuAgent               │
-                 │ EDR / SIEM Agents      │
-                 │ IAM / FW Agents        │
-                 │ Other Security Apps    │
+                 │ EDR / SIEM Agents       │
+                 │ IAM / FW Agents         │
+                 │ Other Security Apps     │
                  └─────────────────────────┘
 ```
+
+Ubuntu is the base OS and execution substrate. It is not the security authority. SecuAgentOS owns the security control plane, package trust, capability resolution, policy enforcement, agent lifecycle, tool authorization, audit, and future autonomous remediation loops.
 
 ## Application Model
 
@@ -130,7 +122,7 @@ This is intended to prevent capability spoofing, unauthorized tool execution, pa
 
 ## VM Development Environment
 
-The current development target is **x86-64** with QEMU/UEFI virtualization. The repository contains scripts for building and running the VM bootstrap artifact:
+The current development target is **x86-64** with QEMU/UEFI virtualization and an Ubuntu Server 24.04 LTS guest baseline. The repository contains scripts for building and running the VM:
 
 ```text
 ./tools/vm/build.sh
@@ -138,9 +130,9 @@ The current development target is **x86-64** with QEMU/UEFI virtualization. The 
 ./tools/vm/health-check.sh
 ```
 
-The GitHub Actions workflow validates the bootstrap path using an Ubuntu runner, builds the UEFI artifact, boots it with QEMU, captures the serial console, and verifies the SecuAgentOS lifecycle states.
+The GitHub Actions workflow validates the bootstrap path using an Ubuntu runner, downloads a pinned official Ubuntu cloud image, verifies its SHA256 checksum, boots it with QEMU/UEFI, injects the SecuAgentOS bootstrap service through a NoCloud seed ISO, captures the serial console, and verifies the SecuAgentOS lifecycle states.
 
-Alpine Linux is currently used as the lightweight bootstrap base for the VM prototype. The project does not treat Alpine as the final SecuAgentOS architecture; it is a development/bootstrap substrate.
+The previous Alpine initramfs path is retained only as historical development material. It is no longer the primary VM runtime path.
 
 ## Repository Structure
 
@@ -153,8 +145,8 @@ SecuAgentOS/
 │   ├── package/
 │   ├── tool/
 │   └── integration/
-├── system/init/              # SecuAgentOS initialization
-├── tools/vm/                 # x86-64 VM build/run helpers
+├── system/init/              # Historical bootstrap; Ubuntu service migration in progress
+├── tools/vm/                 # x86-64 Ubuntu VM build/run helpers
 ├── tests/vm/                 # VM smoke tests
 └── .github/workflows/        # CI/VM validation
 ```
@@ -166,7 +158,7 @@ Development decisions and architecture definitions are maintained under `docs/de
 Important areas include:
 
 - OS architecture and x86-64 virtualization
-- boot and lifecycle design
+- Ubuntu base migration and boot/lifecycle design
 - security control plane
 - Agent Runtime
 - package management and sandboxing
@@ -190,16 +182,17 @@ Development-support tooling such as `luna-chat-coder` is not part of the SecuAge
 
 ## Roadmap
 
-1. Stabilize x86-64 VM bootstrap and CI
-2. Complete process-level application isolation
-3. Implement signed package and publisher trust verification
-4. Implement `sos` package-management CLI
-5. Build the first installable `SecuAgent` package
-6. Add real SIEM/EDR/IAM/firewall adapters
-7. Add shared agent context and memory
-8. Add autonomous observation, diagnosis, remediation and verification loops
-9. Harden for physical x86-64 hardware
-10. Establish reproducible, signed OS/package release artifacts
+1. Stabilize Ubuntu-based x86-64 VM bootstrap and CI
+2. Replace the cloud-init bootstrap prototype with native SecuAgentOS system services
+3. Complete process-level application isolation
+4. Implement signed package and publisher trust verification
+5. Implement `sos` package-management CLI
+6. Build the first installable `SecuAgent` package
+7. Add real SIEM/EDR/IAM/firewall adapters
+8. Add shared agent context and memory
+9. Add autonomous observation, diagnosis, remediation and verification loops
+10. Harden for physical x86-64 hardware
+11. Establish reproducible, signed OS/package release artifacts
 
 ## Current Security Invariants
 
