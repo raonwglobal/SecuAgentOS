@@ -45,8 +45,8 @@ ACTUAL_SHA=$(sha256sum "$WORK_DIR/ubuntu-base.img" | awk '{print $1}')
 
 echo "Ubuntu image checksum: PASS"
 
-# The cloud image is already a UEFI/GPT bootable Ubuntu Server image.
-# Copy it rather than rebuilding an Alpine initramfs or executing guest binaries on the runner.
+# The official Ubuntu cloud image is already a UEFI/GPT bootable guest image.
+# We copy it rather than rebuilding an Alpine initramfs or executing guest binaries on the runner.
 cp "$WORK_DIR/ubuntu-base.img" "$DISK_IMAGE"
 qemu-img resize "$DISK_IMAGE" 8G >/dev/null
 
@@ -89,7 +89,6 @@ write_files:
       [Unit]
       Description=SecuAgentOS Foundation Bootstrap
       After=cloud-init.target
-      Wants=cloud-init.target
 
       [Service]
       Type=simple
@@ -101,7 +100,7 @@ write_files:
 
 runcmd:
   - systemctl daemon-reload
-  - systemctl enable secuagentos-bootstrap.service
+  - systemctl enable --now secuagentos-bootstrap.service
 EOF
 
 xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
