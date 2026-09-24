@@ -66,8 +66,7 @@ write_files:
       STATE_DIR=/run/secuagentos
       LOG_FILE="$STATE_DIR/boot.log"
       mkdir -p "$STATE_DIR"
-      exec >>"$LOG_FILE" 2>&1
-      log() { printf '%s\n' "$*"; }
+      log() { printf '%s\n' "$*" | tee -a "$LOG_FILE" /dev/ttyS0; }
       log 'SECUAGENTOS_STATE=INIT_STARTED'
       printf '%s\n' 'INIT_STARTED' > "$STATE_DIR/state"
       log 'SECUAGENTOS_STATE=FOUNDATION_READY'
