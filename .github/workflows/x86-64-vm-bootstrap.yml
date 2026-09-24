@@ -40,25 +40,41 @@ jobs:
         run: |
           set -eu
           test -s .build/vm/secuagentos-x86_64-ubuntu24.04.img
-          test -s .build/vm/secuagentos-x86_64-cloud-init.iso
+          test -s .build/vm/secuagentos-x86-64-cloud-init.iso || test -s .build/vm/secuagentos-x86_64-cloud-init.iso
           qemu-img info .build/vm/secuagentos-x86_64-ubuntu24.04.img
           sha256sum -c .build/vm/secuagentos-x86_64-ubuntu24.04.img.sha256
           sha256sum -c .build/vm/secuagentos-x86_64-cloud-init.iso.sha256
 
-      - name: Boot Ubuntu VM and capture serial log
+      - name: Boot Ubuntu VM and wait for readiness
         shell: bash
         run: |
-          set +e
-          timeout 300s sh tools/vm/run.sh > vm-boot.log 2>&1
-          rc=$?
-          set -e
+          set -u
+          rm -f vm-boot.log
+          sh tools/vm/run.sh > vm-boot.log 2>&1 &
+          qemu_pid=$!
+          trap 'kill "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true' EXIT INT TERM
+
+          deadline=$((SECONDS + 240))
+          ready=0
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if grep -q 'SECUAGENTOS_HEALTH=READY' vm-boot.log 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited before SecuAgentOS became ready"
+              break
+            fi
+            sleep 2
+          done
+
           echo "========== VM BOOT LOG =========="
           cat vm-boot.log
           echo "========== END VM BOOT LOG =========="
 
-          if [ "$rc" -ne 124 ]; then
-            echo "QEMU exited unexpectedly with code $rc"
-            exit "$rc"
+          if [ "$ready" -ne 1 ]; then
+            echo "SecuAgentOS did not reach HEALTH=READY within 240 seconds"
+            exit 1
           fi
 
           for marker in \
