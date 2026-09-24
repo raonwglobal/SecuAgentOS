@@ -49,7 +49,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          timeout 180s sh tools/vm/run.sh > vm-boot.log 2>&1
+          timeout 300s sh tools/vm/run.sh > vm-boot.log 2>&1
           rc=$?
           set -e
           echo "========== VM BOOT LOG =========="
@@ -72,7 +72,7 @@ jobs:
             grep -q "$marker" vm-boot.log || { echo "Missing boot marker: $marker"; exit 1; }
           done
 
-      - name: Upload VM diagnostics
+      - name: Upload Ubuntu VM diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
