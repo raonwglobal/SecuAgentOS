@@ -45,8 +45,6 @@ ACTUAL_SHA=$(sha256sum "$WORK_DIR/ubuntu-base.img" | awk '{print $1}')
 
 echo "Ubuntu image checksum: PASS"
 
-# The official Ubuntu cloud image is already a UEFI/GPT bootable guest image.
-# We copy it rather than rebuilding an Alpine initramfs or executing guest binaries on the runner.
 cp "$WORK_DIR/ubuntu-base.img" "$DISK_IMAGE"
 qemu-img resize "$DISK_IMAGE" 8G >/dev/null
 
@@ -57,15 +55,18 @@ EOF
 
 cat > "$WORK_DIR/seed/user-data" <<'EOF'
 #cloud-config
+# cloud-init is provisioning only. It installs and enables the OS-native
+# systemd unit; the SecuAgentOS lifecycle itself is owned by systemd.
 write_files:
   - path: /usr/local/sbin/secuagentos-bootstrap
     permissions: '0755'
     content: |
       #!/bin/bash
       set -eu
-      exec >/dev/ttyS0 2>&1
       STATE_DIR=/run/secuagentos
+      LOG_FILE="$STATE_DIR/boot.log"
       mkdir -p "$STATE_DIR"
+      exec >>"$LOG_FILE" 2>&1
       log() { printf '%s\n' "$*"; }
       log 'SECUAGENTOS_STATE=INIT_STARTED'
       printf '%s\n' 'INIT_STARTED' > "$STATE_DIR/state"
@@ -81,26 +82,30 @@ write_files:
       printf '%s\n' 'SYSTEM_READY' > "$STATE_DIR/state"
       printf '%s\n' 'status=READY' > "$STATE_DIR/health"
       log 'SECUAGENTOS_HEALTH=READY'
-      while :; do sleep 3600; done
 
   - path: /etc/systemd/system/secuagentos-bootstrap.service
     permissions: '0644'
     content: |
       [Unit]
       Description=SecuAgentOS Foundation Bootstrap
-      After=cloud-init.target
+      Wants=network-pre.target
+      After=network-pre.target
+      Before=multi-user.target
 
       [Service]
-      Type=simple
+      Type=oneshot
       ExecStart=/usr/local/sbin/secuagentos-bootstrap
-      Restart=no
+      RemainAfterExit=yes
+      StandardOutput=journal+console
+      StandardError=journal+console
 
       [Install]
       WantedBy=multi-user.target
 
 runcmd:
   - systemctl daemon-reload
-  - systemctl enable --now secuagentos-bootstrap.service
+  - systemctl enable secuagentos-bootstrap.service
+  - systemctl start secuagentos-bootstrap.service
 EOF
 
 xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
