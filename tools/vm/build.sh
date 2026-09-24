@@ -4,64 +4,114 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 OUT_DIR="${ROOT_DIR}/.build/vm"
 WORK_DIR="${OUT_DIR}/work"
-# ALPINE_VERSION is compatibility metadata; ALPINE_NETBOOT_BASE controls the actual source.
-ALPINE_VERSION="${ALPINE_VERSION:-3.24.2}"
-ALPINE_NETBOOT_BASE="${ALPINE_NETBOOT_BASE:-https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot}"
-KERNEL_URL="${ALPINE_NETBOOT_BASE}/vmlinuz-lts"
-INITRAMFS_URL="${ALPINE_NETBOOT_BASE}/initramfs-lts"
+
+# Ubuntu is the SecuAgentOS development/runtime base for the x86-64 prototype.
+# Pin the release family and a published image revision instead of using a moving latest endpoint.
+UBUNTU_RELEASE="${UBUNTU_RELEASE:-24.04}"
+UBUNTU_IMAGE_VERSION="${UBUNTU_IMAGE_VERSION:-20260911}"
+UBUNTU_IMAGE_BASE="${UBUNTU_IMAGE_BASE:-https://cloud-images.ubuntu.com/releases/releases/noble/release-${UBUNTU_IMAGE_VERSION}}"
+UBUNTU_IMAGE_URL="${UBUNTU_IMAGE_BASE}/ubuntu-24.04-server-cloudimg-amd64.img"
+UBUNTU_SHA256_URL="${UBUNTU_IMAGE_BASE}/SHA256SUMS"
+
+DISK_IMAGE="$OUT_DIR/secuagentos-x86_64-ubuntu24.04.img"
+SEED_ISO="$OUT_DIR/secuagentos-x86_64-cloud-init.iso"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
 need curl
-need cpio
-need gzip
-need grub-mkrescue
-need mformat
-need xorriso
 need sha256sum
+need xorriso
+need qemu-img
 
 rm -rf "$OUT_DIR"
-mkdir -p "$WORK_DIR/initramfs" "$WORK_DIR/iso/boot/grub"
+mkdir -p "$WORK_DIR/seed"
 
-echo "Downloading Alpine x86_64 netboot assets..."
-echo "Alpine compatibility target: ${ALPINE_VERSION}"
-echo "Netboot source: ${ALPINE_NETBOOT_BASE}"
-curl -fsSI "$KERNEL_URL" >/dev/null
-curl -fsSI "$INITRAMFS_URL" >/dev/null
-curl -fsSL --retry 3 --retry-delay 2 "$KERNEL_URL" -o "$WORK_DIR/iso/boot/vmlinuz"
-curl -fsSL --retry 3 --retry-delay 2 "$INITRAMFS_URL" -o "$WORK_DIR/initramfs.base"
-[ -s "$WORK_DIR/iso/boot/vmlinuz" ] || { echo "empty Alpine kernel asset" >&2; exit 1; }
-[ -s "$WORK_DIR/initramfs.base" ] || { echo "empty Alpine initramfs asset" >&2; exit 1; }
+echo "Downloading Ubuntu x86_64 cloud image..."
+echo "Ubuntu release: ${UBUNTU_RELEASE}"
+echo "Ubuntu image revision: ${UBUNTU_IMAGE_VERSION}"
+echo "Ubuntu image source: ${UBUNTU_IMAGE_URL}"
 
-gzip -dc "$WORK_DIR/initramfs.base" | (cd "$WORK_DIR/initramfs" && cpio -idm --quiet)
+curl -fsSL --retry 3 --retry-delay 2 "$UBUNTU_IMAGE_URL" -o "$WORK_DIR/ubuntu-base.img"
+curl -fsSL --retry 3 --retry-delay 2 "$UBUNTU_SHA256_URL" -o "$WORK_DIR/SHA256SUMS"
 
-# The replacement PID1 executes inside initramfs, not inside the GitHub runner.
-# Validate its shell syntax and the actual initramfs command contract before creating an ISO.
-INIT_SCRIPT="$ROOT_DIR/system/init/secuagentos-init"
-sh -n "$INIT_SCRIPT"
-[ -s "$INIT_SCRIPT" ] || { echo "empty SecuAgentOS PID1 script" >&2; exit 1; }
-[ -x "$WORK_DIR/initramfs/bin/busybox" ] || { echo "initramfs BusyBox is missing or not executable" >&2; exit 1; }
+EXPECTED_SHA=$(awk '/ubuntu-24\.04-server-cloudimg-amd64\.img$/ {print $1; exit}' "$WORK_DIR/SHA256SUMS")
+[ -n "$EXPECTED_SHA" ] || { echo "Ubuntu image checksum not found" >&2; exit 1; }
+ACTUAL_SHA=$(sha256sum "$WORK_DIR/ubuntu-base.img" | awk '{print $1}')
+[ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || {
+  echo "Ubuntu image checksum mismatch" >&2
+  echo "expected: $EXPECTED_SHA" >&2
+  echo "actual:   $ACTUAL_SHA" >&2
+  exit 1
+}
 
-for applet in sh mkdir date tee cat sleep; do
-  "$WORK_DIR/initramfs/bin/busybox" --list | grep -qx "$applet" || {
-    echo "initramfs BusyBox applet missing: $applet" >&2
-    exit 1
-  }
-done
+echo "Ubuntu image checksum: PASS"
 
-# Verify the command lookup contract used by PID1 without requiring a chroot.
-for path in bin/sh bin/busybox; do
-  [ -x "$WORK_DIR/initramfs/$path" ] || { echo "required initramfs executable missing: /$path" >&2; exit 1; }
-done
+# The cloud image is already a UEFI/GPT bootable Ubuntu Server image.
+# Copy it rather than rebuilding an Alpine initramfs or executing guest binaries on the runner.
+cp "$WORK_DIR/ubuntu-base.img" "$DISK_IMAGE"
+qemu-img resize "$DISK_IMAGE" 8G >/dev/null
 
-echo "Initramfs PID1 contract: PASS"
-cp "$INIT_SCRIPT" "$WORK_DIR/initramfs/init"
-chmod 0755 "$WORK_DIR/initramfs/init"
+cat > "$WORK_DIR/seed/meta-data" <<EOF
+instance-id: secuagentos-vm-${UBUNTU_IMAGE_VERSION}
+local-hostname: secuagentos
+EOF
 
-printf '%s\n' "set timeout=0" "set default=0" > "$WORK_DIR/iso/boot/grub/grub.cfg"
-printf '%s\n' "menuentry 'SecuAgentOS x86-64 VM' {" "  linux /boot/vmlinuz console=ttyS0,115200n8 loglevel=4" "  initrd /boot/initramfs-secuagentos" "}" >> "$WORK_DIR/iso/boot/grub/grub.cfg"
+cat > "$WORK_DIR/seed/user-data" <<'EOF'
+#cloud-config
+write_files:
+  - path: /usr/local/sbin/secuagentos-bootstrap
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -eu
+      exec >/dev/ttyS0 2>&1
+      STATE_DIR=/run/secuagentos
+      mkdir -p "$STATE_DIR"
+      log() { printf '%s\n' "$*"; }
+      log 'SECUAGENTOS_STATE=INIT_STARTED'
+      printf '%s\n' 'INIT_STARTED' > "$STATE_DIR/state"
+      log 'SECUAGENTOS_STATE=FOUNDATION_READY'
+      printf '%s\n' 'FOUNDATION_READY' > "$STATE_DIR/state"
+      log 'SECUAGENTOS_STATE=SECURITY_READY'
+      printf '%s\n' 'SECURITY_READY' > "$STATE_DIR/state"
+      log 'SECUAGENTOS_STATE=SERVICES_READY'
+      printf '%s\n' 'SERVICES_READY' > "$STATE_DIR/state"
+      log 'SECUAGENTOS_STATE=RUNTIME_READY'
+      printf '%s\n' 'RUNTIME_READY' > "$STATE_DIR/state"
+      log 'SECUAGENTOS_STATE=SYSTEM_READY'
+      printf '%s\n' 'SYSTEM_READY' > "$STATE_DIR/state"
+      printf '%s\n' 'status=READY' > "$STATE_DIR/health"
+      log 'SECUAGENTOS_HEALTH=READY'
+      while :; do sleep 3600; done
 
-(cd "$WORK_DIR/initramfs" && find . -print | cpio -H newc -o --quiet | gzip -n > "$WORK_DIR/iso/boot/initramfs-secuagentos")
+  - path: /etc/systemd/system/secuagentos-bootstrap.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=SecuAgentOS Foundation Bootstrap
+      After=cloud-init.target
+      Wants=cloud-init.target
 
-grub-mkrescue -o "$OUT_DIR/secuagentos-x86_64-uefi.iso" "$WORK_DIR/iso" >/dev/null
-sha256sum "$OUT_DIR/secuagentos-x86_64-uefi.iso" > "$OUT_DIR/secuagentos-x86_64-uefi.iso.sha256"
-printf '%s\n' "Built: $OUT_DIR/secuagentos-x86_64-uefi.iso" "Alpine compatibility target: $ALPINE_VERSION" "Netboot source: $ALPINE_NETBOOT_BASE"
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/sbin/secuagentos-bootstrap
+      Restart=no
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl enable secuagentos-bootstrap.service
+EOF
+
+xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
+sha256sum "$DISK_IMAGE" > "$DISK_IMAGE.sha256"
+sha256sum "$SEED_ISO" > "$SEED_ISO.sha256"
+
+printf '%s\n' \
+  "Built: $DISK_IMAGE" \
+  "Built: $SEED_ISO" \
+  "Ubuntu release: $UBUNTU_RELEASE" \
+  "Ubuntu image revision: $UBUNTU_IMAGE_VERSION" \
+  "Ubuntu source: $UBUNTU_IMAGE_URL" \
+  "Ubuntu checksum: $EXPECTED_SHA"
