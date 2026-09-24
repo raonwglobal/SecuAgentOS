@@ -13,42 +13,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install VM build dependencies
+      - name: Install Ubuntu VM build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cpio grub-common grub-efi-amd64-bin mtools qemu-system-x86 ovmf xorriso
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf xorriso
 
       - name: Verify VM build dependencies
         run: |
           set -eu
-          command -v grub-mkrescue
-          command -v mformat
-          command -v xorriso
           command -v qemu-system-x86_64
+          command -v qemu-img
+          command -v xorriso
           test -f /usr/share/OVMF/OVMF_CODE_4M.fd || test -f /usr/share/OVMF/OVMF_CODE.fd || test -f /usr/share/qemu/OVMF.fd
           if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo "KVM available"; else echo "KVM unavailable; CI will use QEMU TCG"; fi
 
       - name: Static smoke contract
         run: sh tests/vm/smoke.sh
 
-      - name: Build UEFI VM artifact
+      - name: Build Ubuntu x86-64 VM artifact
         shell: bash
         run: |
           set -o pipefail
           sh tools/vm/build.sh 2>&1 | tee vm-build.log
 
-      - name: Inspect VM artifact
+      - name: Inspect Ubuntu VM artifacts
         run: |
           set -eu
-          test -s .build/vm/secuagentos-x86_64-uefi.iso
-          file .build/vm/secuagentos-x86_64-uefi.iso
-          sha256sum -c .build/vm/secuagentos-x86_64-uefi.iso.sha256
+          test -s .build/vm/secuagentos-x86_64-ubuntu24.04.img
+          test -s .build/vm/secuagentos-x86_64-cloud-init.iso
+          qemu-img info .build/vm/secuagentos-x86_64-ubuntu24.04.img
+          sha256sum -c .build/vm/secuagentos-x86_64-ubuntu24.04.img.sha256
+          sha256sum -c .build/vm/secuagentos-x86_64-cloud-init.iso.sha256
 
-      - name: Boot VM and capture serial log
+      - name: Boot Ubuntu VM and capture serial log
         shell: bash
         run: |
           set +e
-          timeout 120s sh tools/vm/run.sh > vm-boot.log 2>&1
+          timeout 180s sh tools/vm/run.sh > vm-boot.log 2>&1
           rc=$?
           set -e
           echo "========== VM BOOT LOG =========="
@@ -75,7 +76,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: secuagentos-vm-diagnostics
+          name: secuagentos-ubuntu-vm-diagnostics
           path: |
             vm-build.log
             vm-boot.log
