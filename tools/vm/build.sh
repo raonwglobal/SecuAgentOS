@@ -46,6 +46,9 @@ echo "Ubuntu image checksum: PASS"
 cp "$WORK_DIR/ubuntu-base.img" "$DISK_IMAGE"
 qemu-img resize "$DISK_IMAGE" 8G >/dev/null
 
+# Grow the GPT/partition/filesystem metadata during first boot rather than
+# relying on a host-side partition editor. Ubuntu cloud-init/growpart then
+# owns the guest disk expansion consistently.
 cat > "$WORK_DIR/seed/meta-data" <<EOF
 instance-id: secuagentos-vm-${UBUNTU_IMAGE_VERSION}
 local-hostname: secuagentos
@@ -53,8 +56,7 @@ EOF
 
 cat > "$WORK_DIR/seed/user-data" <<'EOF'
 #cloud-config
-# cloud-init is provisioning only. It installs the OS-native systemd unit.
-# SecuAgentOS lifecycle/state is owned by systemd, not by cloud-init itself.
+# cloud-init is provisioning only. SecuAgentOS lifecycle/state is owned by systemd.
 write_files:
   - path: /usr/local/sbin/secuagentos-bootstrap
     permissions: '0755'
@@ -104,7 +106,6 @@ write_files:
 runcmd:
   - [systemctl, daemon-reload]
   - [systemctl, enable, secuagentos-bootstrap.service]
-  - [systemctl, start, --no-block, secuagentos-bootstrap.service]
 EOF
 
 xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
