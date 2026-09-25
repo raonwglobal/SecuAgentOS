@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+STATE_DIR="${SECUAGENTOS_STATE_DIR:-/run/secuagentos}"
+AUDIT_DIR="${SECUAGENTOS_AUDIT_DIR:-$STATE_DIR/audit}"
+AUDIT_LOG="$AUDIT_DIR/audit.log"
+mkdir -p "$AUDIT_DIR"
+
+case "${1:-}" in
+  record)
+    [ $# -ge 4 ] || { echo 'usage: secuagentos-audit record <actor> <action> <result> [details]' >&2; exit 2; }
+    actor="$2"; action="$3"; result="$4"; details="${5:-}"
+    case "$actor:$action:$result" in *[\	\ ]*) echo 'invalid audit field' >&2; exit 2;; esac
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    printf '%s\tactor=%s\taction=%s\tresult=%s\tdetails=%s\n' "$ts" "$actor" "$action" "$result" "$details" >> "$AUDIT_LOG"
+    ;;
+  status)
+    [ -f "$AUDIT_LOG" ] && printf 'status=READY\nlog=%s\n' "$AUDIT_LOG" || printf 'status=NOT_READY\n'
+    ;;
+  *)
+    echo 'usage: secuagentos-audit {record <actor> <action> <result> [details]|status}' >&2
+    exit 2
+    ;;
+esac
