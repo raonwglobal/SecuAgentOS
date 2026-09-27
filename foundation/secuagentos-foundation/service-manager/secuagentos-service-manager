@@ -16,7 +16,9 @@ case "${1:-}" in
     [ $# -ge 3 ] || { echo 'usage: register <name> <command>' >&2; exit 2; }
     name="$2"; command="$3"
     case "$name" in *[!A-Za-z0-9_.-]*|'') echo 'invalid service name' >&2; exit 2;; esac
-    printf '%s\t%s\n' "$name" "$command" >> "$REGISTRY"
+    if ! grep -Fq "^$name	" "$REGISTRY" 2>/dev/null; then
+      printf '%s\t%s\n' "$name" "$command" >> "$REGISTRY"
+    fi
     printf '%s\n' 'REGISTERED' > "$SERVICE_DIR/$name.state"
     ;;
   status)
@@ -26,8 +28,12 @@ case "${1:-}" in
   list)
     [ -f "$REGISTRY" ] && cat "$REGISTRY" || true
     ;;
+  daemon)
+    printf '%s\n' 'status=READY' > "$SERVICE_DIR/manager.health"
+    while :; do sleep 30; done
+    ;;
   *)
-    echo 'usage: secuagentos-service-manager {register <name> <command>|status <name>|list}' >&2
+    echo 'usage: secuagentos-service-manager {register <name> <command>|status <name>|list|daemon}' >&2
     exit 2
     ;;
 esac
