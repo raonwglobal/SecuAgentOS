@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+STATE_DIR="${SECUAGENTOS_STATE_DIR:-/run/secuagentos}"
+SERVICE_DIR="$STATE_DIR/services"
+REGISTRY="$SERVICE_DIR/registry"
+mkdir -p "$SERVICE_DIR"
+
+echo_status() {
+  name="$1"
+  [ -f "$SERVICE_DIR/$name.state" ] && cat "$SERVICE_DIR/$name.state" || printf '%s\n' 'UNKNOWN'
+}
+
+case "${1:-}" in
+  register)
+    [ $# -ge 3 ] || { echo 'usage: register <name> <command>' >&2; exit 2; }
+    name="$2"; command="$3"
+    case "$name" in *[!A-Za-z0-9_.-]*|'') echo 'invalid service name' >&2; exit 2;; esac
+    printf '%s\t%s\n' "$name" "$command" >> "$REGISTRY"
+    printf '%s\n' 'REGISTERED' > "$SERVICE_DIR/$name.state"
+    ;;
+  status)
+    [ $# -ge 2 ] || { echo 'usage: status <name>' >&2; exit 2; }
+    printf 'service=%s\nstate=%s\n' "$2" "$(echo_status "$2")"
+    ;;
+  list)
+    [ -f "$REGISTRY" ] && cat "$REGISTRY" || true
+    ;;
+  *)
+    echo 'usage: secuagentos-service-manager {register <name> <command>|status <name>|list}' >&2
+    exit 2
+    ;;
+esac
