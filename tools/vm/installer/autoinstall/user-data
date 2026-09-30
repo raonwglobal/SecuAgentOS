@@ -1,0 +1,24 @@
+#cloud-config
+# SecuAgentOS Installer v2 - Ubuntu Server autoinstall
+# This file is intended for ISO customization in the next build step.
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  storage:
+    layout:
+      name: direct
+  identity:
+    hostname: secuagentos
+    username: secuagent
+    password: "$6$rounds=4096$SecuAgentOS$REPLACE_AT_INSTALL_TIME"
+  ssh:
+    install-server: true
+  packages:
+    - qemu-guest-agent
+    - curl
+    - ca-certificates
+  late-commands:
+    - curtin in-target --target=/target -- mkdir -p /opt/secuagentos /etc/secuagentos /var/lib/secuagentos /var/log/secuagentos
+  shutdown: reboot
