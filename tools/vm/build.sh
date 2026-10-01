@@ -105,7 +105,7 @@ write_files:
 
 runcmd:
   - [systemctl, daemon-reload]
-  - [systemctl, enable, secuagentos-bootstrap.service]
+  - [systemctl, enable, --now, secuagentos-bootstrap.service]
 EOF
 
 xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
