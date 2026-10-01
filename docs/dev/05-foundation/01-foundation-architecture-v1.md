@@ -46,3 +46,20 @@ Hardware / VM
 6. Agent Runtime
 7. Package Manager
 8. SecuAgent package adapter
+
+
+## VM 통합 검증 v1
+
+Ubuntu 24.04 x86-64 VM 이미지에 Foundation 구성요소를 실제 설치하고 systemd로 Service Manager를 기동한다.
+
+부팅 후 다음 순서를 검증한다.
+
+1. Foundation bootstrap 완료
+2. Event Bus에 foundation.ready 이벤트 기록
+3. Audit Manager에 bootstrap 결과 기록
+4. Service Manager 기동
+5. Event Bus/Health/Audit/Foundation 서비스를 Service Manager에 등록
+6. Health Manager가 READY 반환
+7. `SECUAGENTOS_FOUNDATION_INTEGRATED=READY` 기록
+
+CI에서는 위 통합 상태를 VM boot log로 검증한다.
