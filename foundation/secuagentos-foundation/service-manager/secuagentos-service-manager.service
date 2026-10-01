@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuAgentOS Foundation Service Manager
+After=secuagentos-bootstrap.service
+Requires=secuagentos-bootstrap.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/secuagentos-service-manager daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
