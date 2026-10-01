@@ -28,3 +28,7 @@ UEFI boot
   -> SYSTEM_READY
   -> HEALTH=READY
 ```
+
+## Bootstrap activation fix
+
+Cloud-init may finish after `multi-user.target` has already been reached. The VM provisioning step therefore uses `systemctl enable --now` so SecuAgentOS bootstrap is both enabled for future boots and started immediately on the current boot.
