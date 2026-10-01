@@ -67,6 +67,51 @@ write_files:
       LOG_FILE="$STATE_DIR/boot.log"
       mkdir -p "$STATE_DIR"
       log() {
+        printf '%s\\n' "$*" | tee -a "$LOG_FILE"
+        printf '%s\\n' "$*" > /dev/ttyS0 2>/dev/null || true
+      }
+      transition() {
+        state="$1"
+        log "SECUAGENTOS_STATE=$state"
+        printf '%s\\n' "$state" > "$STATE_DIR/state"
+      }
+      transition INIT_STARTED
+      transition FOUNDATION_READY
+      transition SECURITY_READY
+      transition SERVICES_READY
+      transition RUNTIME_READY
+      transition SYSTEM_READY
+      printf '%s\\n' 'status=READY' > "$STATE_DIR/health"
+      log 'SECUAGENTOS_HEALTH=READY'
+
+  - path: /etc/systemd/system/secuagentos-bootstrap.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=SecuAgentOS Foundation Bootstrap
+      Wants=network-pre.target
+      After=network-pre.target
+      Before=multi-user.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/secuagentos-bootstrap
+      RemainAfterExit=yes
+      StandardOutput=journal+console
+      StandardError=journal+console
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /usr/local/sbin/secuagentos-bootstrap
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -eu
+      STATE_DIR=/run/secuagentos
+      LOG_FILE="$STATE_DIR/boot.log"
+      mkdir -p "$STATE_DIR"
+      log() {
         printf '%s\n' "$*" | tee -a "$LOG_FILE"
         printf '%s\n' "$*" > /dev/ttyS0 2>/dev/null || true
       }
