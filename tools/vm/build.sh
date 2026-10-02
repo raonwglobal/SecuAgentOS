@@ -67,13 +67,13 @@ write_files:
       LOG_FILE="$STATE_DIR/boot.log"
       mkdir -p "$STATE_DIR"
       log() {
-        printf '%s\\n' "$*" | tee -a "$LOG_FILE"
-        printf '%s\\n' "$*" > /dev/ttyS0 2>/dev/null || true
+        printf '%s\n' "$*" | tee -a "$LOG_FILE"
+        printf '%s\n' "$*" > /dev/ttyS0 2>/dev/null || true
       }
       transition() {
         state="$1"
         log "SECUAGENTOS_STATE=$state"
-        printf '%s\\n' "$state" > "$STATE_DIR/state"
+        printf '%s\n' "$state" > "$STATE_DIR/state"
       }
       transition INIT_STARTED
       transition FOUNDATION_READY
@@ -81,7 +81,7 @@ write_files:
       transition SERVICES_READY
       transition RUNTIME_READY
       transition SYSTEM_READY
-      printf '%s\\n' 'status=READY' > "$STATE_DIR/health"
+      printf '%s\n' 'status=READY' > "$STATE_DIR/health"
       log 'SECUAGENTOS_HEALTH=READY'
 
   - path: /etc/systemd/system/secuagentos-bootstrap.service
@@ -303,13 +303,13 @@ write_files:
       /usr/local/libexec/secuagentos-service-manager register foundation-audit '/usr/local/libexec/secuagentos-audit status'
       /usr/local/libexec/secuagentos-service-manager register foundation-runtime '/usr/local/libexec/secuagentos-foundation status'
       /usr/local/libexec/secuagentos-health check
-      printf '%s\\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' | tee -a /run/secuagentos/boot.log; printf '%s\\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' > /dev/ttyS0 2>/dev/null || true
+      printf '%s\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' | tee -a /run/secuagentos/boot.log; printf '%s\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' > /dev/ttyS0 2>/dev/null || true
 
 runcmd:
   - [systemctl, daemon-reload]
   - [systemctl, enable, --now, secuagentos-bootstrap.service]
-  - [systemctl, enable, --now, secuagentos-service-manager.service]
   - [/usr/local/sbin/secuagentos-foundation-integrate]
+  - [systemctl, enable, --now, secuagentos-service-manager.service]
 EOF
 
 xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
