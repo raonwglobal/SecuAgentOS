@@ -217,7 +217,7 @@ write_files:
         record)
           [ $# -ge 4 ] || { echo 'usage: secuagentos-audit record <actor> <action> <result> [details]' >&2; exit 2; }
           actor="$2"; action="$3"; result="$4"; details="${5:-}"
-          case "$actor:$action:$result" in *[\	\ ]*) echo 'invalid audit field' >&2; exit 2;; esac
+          case "$actor:$action:$result" in *[!A-Za-z0-9_.:-]*) echo 'invalid audit field' >&2; exit 2;; esac
           ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           printf '%s\tactor=%s\taction=%s\tresult=%s\tdetails=%s\n' "$ts" "$actor" "$action" "$result" "$details" >> "$AUDIT_LOG"
           ;;
