@@ -258,7 +258,7 @@ write_files:
       /usr/local/libexec/secuagentos-service-manager register foundation-audit '/usr/local/libexec/secuagentos-audit status'
       /usr/local/libexec/secuagentos-service-manager register foundation-runtime '/usr/local/libexec/secuagentos-foundation status'
       /usr/local/libexec/secuagentos-health check
-      printf '%s\\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' >> /run/secuagentos/boot.log
+      printf '%s\\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' | tee -a /run/secuagentos/boot.log; printf '%s\\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' > /dev/ttyS0 2>/dev/null || true
 
 runcmd:
   - [systemctl, daemon-reload]
