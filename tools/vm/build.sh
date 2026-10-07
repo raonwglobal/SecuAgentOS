@@ -290,6 +290,25 @@ write_files:
       [Install]
       WantedBy=multi-user.target
       
+  - path: /etc/systemd/system/secuagentos-foundation-integrate.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=SecuAgentOS Foundation Integration
+      Requires=secuagentos-bootstrap.service
+      After=secuagentos-bootstrap.service
+      Before=secuagentos-service-manager.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/secuagentos-foundation-integrate
+      RemainAfterExit=yes
+      StandardOutput=journal+console
+      StandardError=journal+console
+
+      [Install]
+      WantedBy=multi-user.target
+
   - path: /usr/local/sbin/secuagentos-foundation-integrate
     permissions: '0755'
     content: |
@@ -308,7 +327,7 @@ write_files:
 runcmd:
   - [systemctl, daemon-reload]
   - [systemctl, enable, --now, secuagentos-bootstrap.service]
-  - [/usr/local/sbin/secuagentos-foundation-integrate]
+  - [systemctl, enable, --now, secuagentos-foundation-integrate.service]
   - [systemctl, enable, --now, secuagentos-service-manager.service]
 EOF
 
