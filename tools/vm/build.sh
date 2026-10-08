@@ -315,20 +315,22 @@ write_files:
       #!/bin/bash
       set -eu
       export SECUAGENTOS_STATE_DIR=/run/secuagentos
+      LOG=/run/secuagentos/boot.log
+      log() { printf '%s\n' "$*" | tee -a "$LOG"; printf '%s\n' "$*" > /dev/ttyS0 2>/dev/null || true; }
       if [ -f /run/secuagentos/foundation-integrated ]; then
         exit 0
       fi
-      /usr/local/libexec/secuagentos-event-bus emit foundation.ready 'version=0.1.0'
+      log 'SECUAGENTOS_INTEGRATION=STARTED'
+      /usr/local/libexec/secuagentos-event-bus emit foundation.ready 'version=0.1.0' >/run/secuagentos/foundation-event-id
       /usr/local/libexec/secuagentos-audit record foundation bootstrap READY 'foundation-v0.1.0'
       /usr/local/libexec/secuagentos-service-manager register foundation-event-bus '/usr/local/libexec/secuagentos-event-bus health'
       /usr/local/libexec/secuagentos-service-manager register foundation-health '/usr/local/libexec/secuagentos-health check'
       /usr/local/libexec/secuagentos-service-manager register foundation-audit '/usr/local/libexec/secuagentos-audit status'
       /usr/local/libexec/secuagentos-service-manager register foundation-runtime '/usr/local/libexec/secuagentos-foundation status'
-      /usr/local/libexec/secuagentos-health check
+      /usr/local/libexec/secuagentos-health check >/run/secuagentos/foundation-health
       touch /run/secuagentos/foundation-integrated
-      printf '%s\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' | tee -a /run/secuagentos/boot.log
-      printf '%s\n' 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' > /dev/ttyS0 2>/dev/null || true
-      printf '%s\n' 'SECUAGENTOS_EVENT=foundation.ready' > /dev/ttyS0 2>/dev/null || true
+      log 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY'
+      log 'SECUAGENTOS_EVENT=foundation.ready'
 
 runcmd:
   - [systemctl, daemon-reload]
