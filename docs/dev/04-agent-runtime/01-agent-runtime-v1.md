@@ -32,3 +32,6 @@ A quarantined or failed agent receives no new executable task. Restart policy is
 
 ## Initial implementation
 The first runtime implementation is an in-process deterministic scheduler suitable for unit testing. Later versions may use worker processes, containers, VMs, or other isolation backends without changing the logical runtime contract.
+
+## VM integration
+The x86-64 Ubuntu VM boots the Foundation first, then starts the Agent Runtime integration service. The integration requires Foundation integration and a READY health result before creating the runtime readiness state. CI verifies the `SECUAGENTOS_AGENT_RUNTIME=READY` serial marker.
