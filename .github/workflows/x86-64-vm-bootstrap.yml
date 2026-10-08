@@ -85,7 +85,8 @@ jobs:
             'SECUAGENTOS_STATE=RUNTIME_READY' \
             'SECUAGENTOS_STATE=SYSTEM_READY' \
             'SECUAGENTOS_HEALTH=READY' \
-            'SECUAGENTOS_FOUNDATION_INTEGRATED=READY'; do
+            'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' \
+            'SECUAGENTOS_AGENT_RUNTIME=READY'; do
             grep -q "$marker" vm-boot.log || { echo "Missing boot marker: $marker"; exit 1; }
           done
 
@@ -96,6 +97,7 @@ jobs:
           set -eu
           grep -q 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' vm-boot.log
           grep -q 'foundation.ready' vm-boot.log
+          grep -q 'SECUAGENTOS_AGENT_RUNTIME=READY' vm-boot.log
 
       - name: Upload Ubuntu VM diagnostics
         if: always()
