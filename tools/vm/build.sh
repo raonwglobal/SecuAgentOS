@@ -377,12 +377,6 @@ runcmd:
   - [systemctl, enable, secuagentos-foundation-integrate.service]
   - [systemctl, enable, --now, secuagentos-service-manager.service]
 EOF
-  - [systemctl, daemon-reload]
-  - [systemctl, enable, --now, secuagentos-bootstrap.service]
-  - [/usr/local/sbin/secuagentos-foundation-integrate]
-  - [systemctl, enable, secuagentos-foundation-integrate.service]
-  - [systemctl, enable, --now, secuagentos-service-manager.service]
-EOF
 
 xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
 sha256sum "$DISK_IMAGE" > "$DISK_IMAGE.sha256"
