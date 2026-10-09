@@ -372,9 +372,10 @@ write_files:
 runcmd:
   - [systemctl, daemon-reload]
   - [systemctl, enable, --now, secuagentos-bootstrap.service]
+  - [systemctl, enable, --now, secuagentos-foundation-integrate.service]
   - [/usr/local/sbin/secuagentos-foundation-integrate]
+  - [/usr/local/libexec/secuagentos-agent-runtime]
   - [systemctl, enable, --now, secuagentos-agent-runtime.service]
-  - [systemctl, enable, secuagentos-foundation-integrate.service]
   - [systemctl, enable, --now, secuagentos-service-manager.service]
 EOF
 
