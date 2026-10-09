@@ -339,14 +339,14 @@ write_files:
       set -eu
       STATE_DIR=/run/secuagentos
       LOG=$STATE_DIR/boot.log
-      log() { printf '%s\\n' "$*" | tee -a "$LOG"; printf '%s\\n' "$*" > /dev/ttyS0 2>/dev/null || true; }
+      log() { printf '%s\n' "$*" | tee -a "$LOG"; printf '%s\n' "$*" > /dev/ttyS0 2>/dev/null || true; }
       log 'SECUAGENTOS_AGENT_RUNTIME=STARTED'
       [ -f "$STATE_DIR/foundation-integrated" ]
       grep -q '^status=READY$' "$STATE_DIR/foundation-health"
       mkdir -p "$STATE_DIR/runtime"
-      printf '%s\\n' 'state=READY' > "$STATE_DIR/runtime/state"
-      printf '%s\\n' 'version=0.1.0' > "$STATE_DIR/runtime/version"
-      printf '%s\\n' 'foundation=READY' > "$STATE_DIR/runtime/foundation"
+      printf '%s\n' 'state=READY' > "$STATE_DIR/runtime/state"
+      printf '%s\n' 'version=0.1.0' > "$STATE_DIR/runtime/version"
+      printf '%s\n' 'foundation=READY' > "$STATE_DIR/runtime/foundation"
       touch "$STATE_DIR/agent-runtime-ready"
       log 'SECUAGENTOS_AGENT_RUNTIME=READY'
 
