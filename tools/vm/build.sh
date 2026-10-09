@@ -342,48 +342,7 @@ write_files:
       log() { printf '%s\\n' "$*" | tee -a "$LOG"; printf '%s\\n' "$*" > /dev/ttyS0 2>/dev/null || true; }
       log 'SECUAGENTOS_AGENT_RUNTIME=STARTED'
       [ -f "$STATE_DIR/foundation-integrated" ]
-      grep -q '^status=READY
-
-  - path: /etc/systemd/system/secuagentos-agent-runtime.service
-    permissions: '0644'
-    content: |
-      [Unit]
-      Description=SecuAgentOS Agent Runtime
-      Requires=secuagentos-foundation-integrate.service
-      After=secuagentos-foundation-integrate.service
-      Before=secuagentos-service-manager.service
-
-      [Service]
-      Type=oneshot
-      ExecStart=/usr/local/libexec/secuagentos-agent-runtime
-      RemainAfterExit=yes
-      StandardOutput=journal+console
-      StandardError=journal+console
-
-      [Install]
-      WantedBy=multi-user.target
-
-runcmd:
-  - [systemctl, daemon-reload]
-  - [systemctl, enable, --now, secuagentos-bootstrap.service]
-  - [/usr/local/sbin/secuagentos-foundation-integrate]
-  - [systemctl, enable, --now, secuagentos-agent-runtime.service]
-  - [systemctl, enable, secuagentos-foundation-integrate.service]
-  - [systemctl, enable, --now, secuagentos-service-manager.service]
-EOF
-
-xorriso -as mkisofs -quiet -volid CIDATA -joliet -rock "$WORK_DIR/seed" -o "$SEED_ISO"
-sha256sum "$DISK_IMAGE" > "$DISK_IMAGE.sha256"
-sha256sum "$SEED_ISO" > "$SEED_ISO.sha256"
-
-printf '%s\n' \
-  "Built: $DISK_IMAGE" \
-  "Built: $SEED_ISO" \
-  "Ubuntu release: $UBUNTU_RELEASE" \
-  "Ubuntu image revision: $UBUNTU_IMAGE_VERSION" \
-  "Ubuntu source: $UBUNTU_IMAGE_URL" \
-  "Ubuntu checksum: $EXPECTED_SHA"
- "$STATE_DIR/foundation-health"
+      grep -q '^status=READY$' "$STATE_DIR/foundation-health"
       mkdir -p "$STATE_DIR/runtime"
       printf '%s\\n' 'state=READY' > "$STATE_DIR/runtime/state"
       printf '%s\\n' 'version=0.1.0' > "$STATE_DIR/runtime/version"
