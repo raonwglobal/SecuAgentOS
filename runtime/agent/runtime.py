@@ -1,11 +1,13 @@
 """Minimal deterministic Agent Runtime for SecuAgentOS."""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Mapping, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from runtime.package.manager import PackageManager
+
 
 class AgentState(str, Enum):
     REGISTERED = "REGISTERED"
@@ -17,6 +19,7 @@ class AgentState(str, Enum):
     QUARANTINED = "QUARANTINED"
     FAILED = "FAILED"
 
+
 @dataclass(frozen=True)
 class AgentDescriptor:
     agent_id: str
@@ -25,6 +28,7 @@ class AgentDescriptor:
     resources: Mapping[str, str] = field(default_factory=dict)
     package_name: str | None = None
 
+
 @dataclass(frozen=True)
 class AgentTask:
     task_id: str
@@ -32,10 +36,12 @@ class AgentTask:
     action: str
     payload: Mapping[str, object] = field(default_factory=dict)
 
+
 @dataclass
 class AgentRecord:
     descriptor: AgentDescriptor
     state: AgentState = AgentState.REGISTERED
+
 
 class AgentRuntime:
     def __init__(self, package_manager: PackageManager | None = None) -> None:
@@ -72,11 +78,23 @@ class AgentRuntime:
 
     def is_executable(self, agent_id: str) -> bool:
         record = self.agents.get(agent_id)
-        return record is not None and record.state in (AgentState.READY, AgentState.WAITING)
+        if record is None or record.state not in (AgentState.READY, AgentState.WAITING):
+            return False
+        package_name = record.descriptor.package_name
+        if package_name is None:
+            return True
+        if self._package_manager is None:
+            return False
+        try:
+            from runtime.package.manager import PackageState
+            return self._package_manager.get(package_name).state is PackageState.ACTIVATED
+        except (KeyError, RuntimeError):
+            return False
 
     def capabilities_for(self, agent_id: str) -> frozenset[str]:
-        record = self.agents[agent_id]
-        return record.descriptor.capabilities
+        if not self.is_executable(agent_id):
+            raise PermissionError("agent_not_executable")
+        return self.agents[agent_id].descriptor.capabilities
 
     def quarantine(self, agent_id: str) -> None:
         self.agents[agent_id].state = AgentState.QUARANTINED
@@ -93,8 +111,10 @@ class AgentRuntime:
         record = self.agents[task.agent_id]
         if record.state is AgentState.QUARANTINED:
             raise PermissionError("agent_quarantined")
-        if record.state is not AgentState.READY:
+        if record.state not in (AgentState.READY, AgentState.WAITING):
             raise RuntimeError(f"agent_not_ready:{record.state.value}")
+        if not self.is_executable(task.agent_id):
+            raise PermissionError("agent_not_executable")
         handler = self.handlers.get(task.action)
         if handler is None:
             raise LookupError("task_handler_not_found")
