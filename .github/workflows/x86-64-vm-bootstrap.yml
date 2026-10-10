@@ -57,12 +57,16 @@ jobs:
           deadline=$((SECONDS + 240))
           ready=0
           while [ "$SECONDS" -lt "$deadline" ]; do
-            if grep -q 'SECUAGENTOS_HEALTH=READY' vm-boot.log 2>/dev/null; then
+            # Health is emitted by the early bootstrap stage. Wait for the
+            # full cloud-init/systemd chain so Foundation and Agent Runtime
+            # readiness checks do not race provisioning.
+            if grep -q 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' vm-boot.log 2>/dev/null \
+              && grep -q 'SECUAGENTOS_AGENT_RUNTIME=READY' vm-boot.log 2>/dev/null; then
               ready=1
               break
             fi
             if ! kill -0 "$qemu_pid" 2>/dev/null; then
-              echo "QEMU exited before SecuAgentOS became ready"
+              echo "QEMU exited before Foundation and Agent Runtime became ready"
               break
             fi
             sleep 2
@@ -73,7 +77,7 @@ jobs:
           echo "========== END VM BOOT LOG =========="
 
           if [ "$ready" -ne 1 ]; then
-            echo "SecuAgentOS did not reach HEALTH=READY within 240 seconds"
+            echo "SecuAgentOS Foundation/Agent Runtime did not become ready within 240 seconds"
             exit 1
           fi
 
