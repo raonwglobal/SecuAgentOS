@@ -43,6 +43,7 @@ def test_activated_package_drives_agent_and_tool_authority():
         controller,
         principal_allowed=app.is_executable,
         capability_provider=app.capabilities_for,
+        execution_state_provider=app.is_executable,
     )
     adapter = Adapter()
     gateway.register("siem.query", "event.read", adapter)
