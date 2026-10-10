@@ -28,3 +28,11 @@ def test_failed_task_quarantinable_state():
     with pytest.raises(RuntimeError):
         r.execute(AgentTask("task-1", "agent:fail", "fail"))
     assert r.agents["agent:fail"].state is AgentState.FAILED
+
+
+def test_agent_can_execute_again_from_waiting_state():
+    r = make_runtime()
+    first = r.execute(AgentTask("task-1", "agent:test", "health"))
+    second = r.execute(AgentTask("task-2", "agent:test", "health"))
+    assert first == second == {"ok": True}
+    assert r.agents["agent:test"].state is AgentState.WAITING
