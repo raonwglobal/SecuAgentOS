@@ -27,9 +27,9 @@ def make_gateway(allowed=("event.read", "firewall.block"), principal_allowed=Non
     controller = SecurityController(StaticPolicy(allowed), audit)
     return ToolGateway(controller, principal_allowed), audit
 
-def req(action="event.read", caps=frozenset({"event.read"}), approved=False):
+def req(action="event.read", caps=frozenset({"event.read"}), approved=False, tool="siem.query"):
     return ToolRequest(
-        "r1", "agent-1", "siem.query", action, "target",
+        "r1", "agent-1", tool, action, "target",
         caps, approved=approved
     )
 
@@ -66,7 +66,7 @@ def test_approved_high_risk_reaches_adapter():
     adapter = Adapter()
     gw.register("firewall.block", "firewall.block", adapter)
     response = gw.execute(
-        req("firewall.block", frozenset({"firewall.block"}), approved=True)
+        req("firewall.block", frozenset({"firewall.block"}), approved=True, tool="firewall.block")
     )
     assert response.success
     assert adapter.calls == 1
