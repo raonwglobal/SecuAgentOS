@@ -27,6 +27,16 @@ jobs:
           test -f /usr/share/OVMF/OVMF_CODE_4M.fd || test -f /usr/share/OVMF/OVMF_CODE.fd || test -f /usr/share/qemu/OVMF.fd
           if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo "KVM available"; else echo "KVM unavailable; CI will use QEMU TCG"; fi
 
+      - name: Set up Python for security/runtime tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run security and runtime unit tests
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q kernel runtime
+
       - name: Static smoke contract
         run: sh tests/vm/smoke.sh
 
