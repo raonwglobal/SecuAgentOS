@@ -55,7 +55,7 @@ def test_high_risk_requires_approval():
     adapter = Adapter()
     gw.register("firewall.block", "firewall.block", adapter)
     response = gw.execute(
-        req("firewall.block", frozenset({"firewall.block"}))
+        req("firewall.block", frozenset({"firewall.block"}), tool="firewall.block")
     )
     assert not response.success
     assert response.error == "approval_required"
