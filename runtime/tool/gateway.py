@@ -50,12 +50,14 @@ class ToolGateway:
         principal_allowed: Callable[[str], bool] | None = None,
         capability_provider: Callable[[str], frozenset[str]] | None = None,
         execution_state_provider: Callable[[str], bool] | None = None,
+        tool_provider: Callable[[str], frozenset[str]] | None = None,
     ) -> None:
         self._controller = controller
         self._adapters: dict[str, tuple[str, ToolAdapter, ToolVerifier | None]] = {}
         self._principal_allowed = principal_allowed or (lambda principal: True)
         self._capability_provider = capability_provider
         self._execution_state_provider = execution_state_provider
+        self._tool_provider = tool_provider
 
     def register(
         self,
@@ -107,6 +109,15 @@ class ToolGateway:
             capabilities = frozenset(self._capability_provider(request.principal))
         except Exception:
             return self._deny(request, "capability_lookup_failed")
+
+        if self._tool_provider is None:
+            return self._deny(request, "tool_authority_unavailable")
+        try:
+            declared_tools = frozenset(self._tool_provider(request.principal))
+        except Exception:
+            return self._deny(request, "tool_lookup_failed")
+        if request.tool not in declared_tools:
+            return self._deny(request, "tool_not_declared_by_package")
 
         security_request = SecurityRequest(
             request_id=request.request_id,
