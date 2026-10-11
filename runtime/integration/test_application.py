@@ -44,6 +44,7 @@ def test_activated_package_drives_agent_and_tool_authority():
         principal_allowed=app.is_executable,
         capability_provider=app.capabilities_for,
         execution_state_provider=app.is_executable,
+        tool_provider=app.tools_for,
     )
     adapter = Adapter()
     gateway.register("siem.query", "event.read", adapter)
@@ -102,6 +103,7 @@ def test_disabling_package_revokes_agent_and_tool_execution():
         principal_allowed=app.is_executable,
         capability_provider=app.capabilities_for,
         execution_state_provider=app.is_executable,
+        tool_provider=app.tools_for,
     )
     adapter = Adapter()
     gateway.register("siem.query", "event.read", adapter)
@@ -124,3 +126,39 @@ def test_disabling_package_revokes_agent_and_tool_execution():
     assert not response.success
     assert response.error == "principal_not_allowed"
     assert adapter.calls == 0
+
+
+
+def test_package_cannot_execute_undeclared_tool():
+    pm = make_package_manager()
+    manifest = PackageManifest(
+        "secuagent", "1.0.0", "security-application", "0.5.0",
+        frozenset({"event.read"}), frozenset({"event.read"}),
+        frozenset({"siem.query"})
+    )
+    install_package(pm, manifest)
+    agents = AgentRuntime(pm)
+    app = ApplicationRuntime(pm, agents)
+    app.activate_agent("agent:secuagent", "secuagent")
+
+    audit = MemoryAuditSink()
+    controller = SecurityController(StaticPolicy({"event.read"}), audit)
+    gateway = __import__("runtime.tool.gateway", fromlist=["ToolGateway"]).ToolGateway(
+        controller,
+        principal_allowed=app.is_executable,
+        capability_provider=app.capabilities_for,
+        execution_state_provider=app.is_executable,
+        tool_provider=app.tools_for,
+    )
+    adapter = Adapter()
+    gateway.register("shell.exec", "event.read", adapter)
+
+    from runtime.tool.gateway import ToolRequest
+    response = gateway.execute(ToolRequest(
+        "r-undeclared", "agent:secuagent", "shell.exec", "event.read", "target",
+        frozenset({"event.read"})
+    ))
+    assert not response.success
+    assert response.error == "tool_not_declared_by_package"
+    assert adapter.calls == 0
+    assert audit.records[-1]["reason"] == "tool_not_declared_by_package"
