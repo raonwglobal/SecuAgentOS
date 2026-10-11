@@ -19,3 +19,17 @@ class ApplicationRuntime:
 
     def capabilities_for(self, principal: str) -> frozenset[str]:
         return self.agents.capabilities_for(principal)
+
+    def tools_for(self, principal: str) -> frozenset[str]:
+        """Return only tools declared by the active package backing this agent."""
+        if not self.agents.is_executable(principal):
+            raise PermissionError("agent_not_executable")
+        record = self.agents.agents[principal]
+        package_name = record.descriptor.package_name
+        if package_name is None:
+            return frozenset()
+        package = self.packages.get(package_name)
+        from runtime.package.manager import PackageState
+        if package.state is not PackageState.ACTIVATED:
+            raise PermissionError("package_not_activated")
+        return package.manifest.tools
