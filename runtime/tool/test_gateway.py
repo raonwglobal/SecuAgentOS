@@ -35,6 +35,7 @@ def make_gateway(
     principal_allowed=None,
     capability_provider=None,
     execution_state_provider=None,
+    tool_provider=None,
 ):
     audit = MemoryAuditSink()
     controller = SecurityController(StaticPolicy(allowed), audit)
@@ -43,6 +44,7 @@ def make_gateway(
         principal_allowed=principal_allowed,
         capability_provider=capability_provider or (lambda principal: DEFAULT_CAPABILITIES),
         execution_state_provider=execution_state_provider or (lambda principal: True),
+        tool_provider=tool_provider or (lambda principal: frozenset({"siem.query", "firewall.block"})),
     )
     return gateway, audit
 
@@ -200,4 +202,37 @@ def test_capability_provider_exception_fails_closed():
     gw.register("siem.query", "event.read", adapter)
     response = gw.execute(req())
     assert response.error == "capability_lookup_failed"
+    assert adapter.calls == 0
+
+
+
+def test_undeclared_tool_is_denied_before_adapter_call():
+    gw, audit = make_gateway(tool_provider=lambda principal: frozenset({"siem.query"}))
+    adapter = Adapter()
+    gw.register("firewall.block", "firewall.block", adapter)
+    response = gw.execute(req(
+        action="firewall.block",
+        caps=frozenset({"firewall.block"}),
+        approved=True,
+        tool="firewall.block",
+    ))
+    assert not response.success
+    assert response.error == "tool_not_declared_by_package"
+    assert adapter.calls == 0
+    assert audit.records[-1]["reason"] == "tool_not_declared_by_package"
+
+
+def test_missing_tool_authority_fails_closed():
+    audit = MemoryAuditSink()
+    controller = SecurityController(StaticPolicy(("event.read",)), audit)
+    gw = ToolGateway(
+        controller,
+        capability_provider=lambda principal: frozenset({"event.read"}),
+        execution_state_provider=lambda principal: True,
+    )
+    adapter = Adapter()
+    gw.register("siem.query", "event.read", adapter)
+    response = gw.execute(req())
+    assert not response.success
+    assert response.error == "tool_authority_unavailable"
     assert adapter.calls == 0
