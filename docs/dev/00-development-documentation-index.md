@@ -15,7 +15,7 @@ This directory is the authoritative development-design record for SecuAgentOS. A
 - 03-security-kernel/ — identity, capability, policy, trust, risk and audit
 - 04-agent-runtime/ — agent lifecycle, task, scheduler, event bus and A2A
 - 05-application-package/ — application and package model
-- 06-tool-integration/ — tool gateway and external security systems
+- 06-tool-integration/ — tool gateway, package-declared tool allowlists, and external security systems
 - 07-self-healing/ — diagnosis, remediation, verification and rollback
 - 08-testing-validation/ — VM testbed, integration and security validation
 - 09-migration/ — migration from the current repository structure
