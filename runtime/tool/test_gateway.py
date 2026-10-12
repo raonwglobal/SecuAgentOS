@@ -236,3 +236,17 @@ def test_missing_tool_authority_fails_closed():
     assert not response.success
     assert response.error == "tool_authority_unavailable"
     assert adapter.calls == 0
+
+def test_tool_authority_provider_exception_fails_closed():
+    def broken_tools(principal):
+        raise RuntimeError("package authority unavailable")
+
+    gw, audit = make_gateway(tool_provider=broken_tools)
+    adapter = Adapter()
+    gw.register("siem.query", "event.read", adapter)
+    response = gw.execute(req())
+    assert not response.success
+    assert response.error == "tool_lookup_failed"
+    assert adapter.calls == 0
+    assert audit.records[-1]["reason"] == "tool_lookup_failed"
+
