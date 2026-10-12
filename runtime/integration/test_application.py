@@ -162,3 +162,43 @@ def test_package_cannot_execute_undeclared_tool():
     assert response.error == "tool_not_declared_by_package"
     assert adapter.calls == 0
     assert audit.records[-1]["reason"] == "tool_not_declared_by_package"
+
+def test_package_tool_still_requires_high_risk_approval():
+    pm = make_package_manager()
+    manifest = PackageManifest(
+        "secuagent", "1.0.0", "security-application", "0.5.0",
+        frozenset({"firewall.block"}), frozenset({"firewall.block"}),
+        frozenset({"firewall.block"})
+    )
+    install_package(pm, manifest)
+    agents = AgentRuntime(pm)
+    app = ApplicationRuntime(pm, agents)
+    app.activate_agent("agent:secuagent", "secuagent")
+
+    audit = MemoryAuditSink()
+    controller = SecurityController(StaticPolicy({"firewall.block"}), audit)
+    from runtime.tool.gateway import ToolGateway, ToolRequest
+    gateway = ToolGateway(
+        controller,
+        principal_allowed=app.is_executable,
+        capability_provider=app.capabilities_for,
+        execution_state_provider=app.is_executable,
+        tool_provider=app.tools_for,
+    )
+    adapter = Adapter()
+    gateway.register("firewall.block", "firewall.block", adapter)
+
+    request = ToolRequest(
+        "r-high-risk", "agent:secuagent", "firewall.block",
+        "firewall.block", "host:example", frozenset({"firewall.block"})
+    )
+    denied = gateway.execute(request)
+    assert not denied.success
+    assert denied.error == "approval_required"
+    assert adapter.calls == 0
+
+    from dataclasses import replace
+    approved = gateway.execute(replace(request, request_id="r-high-risk-approved", approved=True))
+    assert approved.success
+    assert adapter.calls == 1
+
