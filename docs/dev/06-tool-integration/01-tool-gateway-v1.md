@@ -38,6 +38,12 @@ Adapter는 `execute(request)`를 제공한다. Gateway는 등록된 tool 이름�
 - quarantined/비활성 principal: adapter 미호출
 - 재시도는 idempotency와 risk policy가 정의된 경우에만 허용한다.
 
+## 통합 보안 검증
+- Package Manager에서 활성화된 Manifest의 tools allowlist가 Gateway 실행 권한의 기준이다.
+- tool authority 제공자 조회 예외/누락은 fail-closed이며 adapter를 호출하지 않는다.
+- HIGH/CRITICAL 작업은 패키지와 capability가 허용하더라도 명시적 approval 없이는 실행하지 않는다.
+- 승인 전/후 실행 결과와 adapter 호출 횟수를 통합 테스트로 검증한다.
+
 ## v1 범위
 로컬 in-process adapter와 deterministic tests를 사용한다. 실제 SIEM/EDR/Firewall/IAM connector는 이후 package/integration 계층에서 추가한다.
 
