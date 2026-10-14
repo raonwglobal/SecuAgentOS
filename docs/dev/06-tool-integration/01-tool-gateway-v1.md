@@ -35,7 +35,7 @@ Adapter는 `execute(request)`를 제공한다. Gateway는 등록된 tool 이름�
 - unknown tool: DENY
 - adapter exception/timeout: 실패 응답 + audit
 - verification failure: 실패 응답 + audit
-- quarantined/비활성 principal: adapter 미호출
+- quarantined/비활성 principal 또는 패키지: adapter 미호출 (Package Manager quarantine은 실행 권한을 즉시 회수하고 audit에 사유를 기록)
 - 재시도는 idempotency와 risk policy가 정의된 경우에만 허용한다.
 
 ## 통합 보안 검증
