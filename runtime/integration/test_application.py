@@ -202,3 +202,45 @@ def test_package_tool_still_requires_high_risk_approval():
     assert approved.success
     assert adapter.calls == 1
 
+def test_quarantining_package_revokes_agent_and_tool_execution():
+    pm = make_package_manager()
+    manifest = PackageManifest(
+        "secuagent", "1.0.0", "security-application", "0.5.0",
+        frozenset({"event.read"}), frozenset({"event.read"}),
+        frozenset({"siem.query"})
+    )
+    install_package(pm, manifest)
+    agents = AgentRuntime(pm)
+    app = ApplicationRuntime(pm, agents)
+    app.activate_agent("agent:secuagent", "secuagent")
+
+    audit = MemoryAuditSink()
+    controller = SecurityController(StaticPolicy({"event.read"}), audit)
+    from runtime.tool.gateway import ToolGateway, ToolRequest
+    gateway = ToolGateway(
+        controller,
+        principal_allowed=app.is_executable,
+        capability_provider=app.capabilities_for,
+        execution_state_provider=app.is_executable,
+        tool_provider=app.tools_for,
+    )
+    adapter = Adapter()
+    gateway.register("siem.query", "event.read", adapter)
+
+    pm.quarantine("secuagent", reason="integrity_alert")
+    assert not app.is_executable("agent:secuagent")
+    try:
+        app.tools_for("agent:secuagent")
+    except PermissionError as exc:
+        assert str(exc) == "agent_not_executable"
+    else:
+        raise AssertionError("quarantined package must lose tool authority")
+
+    response = gateway.execute(ToolRequest(
+        "r-quarantined", "agent:secuagent", "siem.query",
+        "event.read", "target", frozenset({"event.read"})
+    ))
+    assert not response.success
+    assert response.error == "principal_not_allowed"
+    assert adapter.calls == 0
+
