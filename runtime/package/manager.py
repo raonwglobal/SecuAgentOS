@@ -107,6 +107,20 @@ class PackageManager:
         self._audit.append({"package": name, "state": record.state.value, "event": "disable"})
         return record
 
+    def quarantine(self, name: str, reason: str = "security_review") -> PackageRecord:
+        """Immediately revoke execution by quarantining an active package."""
+        record = self._packages[name]
+        if record.state not in (PackageState.ACTIVATED, PackageState.QUARANTINED):
+            raise RuntimeError("package_not_active")
+        record.state = PackageState.QUARANTINED
+        self._audit.append({
+            "package": name,
+            "state": record.state.value,
+            "event": "quarantine",
+            "reason": reason,
+        })
+        return record
+
     def get(self, name: str) -> PackageRecord:
         return self._packages[name]
 
