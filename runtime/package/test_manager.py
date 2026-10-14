@@ -39,3 +39,36 @@ def test_sandbox_exposes_only_declared_contract():
     assert context["capabilities"] == frozenset({"threat.detect","incident.analyze"})
     assert context["tools"] == frozenset({"siem.query"})
     assert context["resources"]["memory"] == "4Gi"
+
+def test_quarantine_revokes_package_activation_and_is_audited():
+    audit = MemoryAuditSink()
+    pm = PackageManager(Trust(), Runtime(), audit)
+    pm.discover(manifest())
+    pm.verify("secuagent")
+    pm.stage("secuagent")
+    pm.install("secuagent")
+    pm.activate("secuagent")
+
+    record = pm.quarantine("secuagent", reason="integrity_alert")
+    assert record.state is PackageState.QUARANTINED
+    assert audit.records[-1]["event"] == "quarantine"
+    assert audit.records[-1]["reason"] == "integrity_alert"
+
+    try:
+        pm.sandbox_context("secuagent")
+    except PermissionError as exc:
+        assert str(exc) == "invalid_package_state:QUARANTINED"
+    else:
+        raise AssertionError("quarantined package must not expose sandbox context")
+
+
+def test_quarantine_rejects_package_that_was_never_active():
+    pm = manager()
+    pm.discover(manifest())
+    try:
+        pm.quarantine("secuagent", reason="unexpected_state")
+    except RuntimeError as exc:
+        assert str(exc) == "package_not_active"
+    else:
+        raise AssertionError("inactive package cannot be quarantined as active")
+
