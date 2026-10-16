@@ -127,6 +127,29 @@ def test_disabling_package_revokes_agent_and_tool_execution():
     assert response.error == "principal_not_allowed"
     assert adapter.calls == 0
 
+    recovered = pm.recover_quarantined(
+        "secuagent", approved_by="security-reviewer", reason="integrity-cleared"
+    )
+    assert recovered.state.value == "VERIFIED"
+    assert not app.is_executable("agent:secuagent")
+    try:
+        app.tools_for("agent:secuagent")
+    except PermissionError as exc:
+        assert str(exc) == "agent_not_executable"
+    else:
+        raise AssertionError("approved recovery must not immediately restore execution")
+
+    pm.stage("secuagent")
+    pm.install("secuagent")
+    pm.activate("secuagent")
+    assert app.is_executable("agent:secuagent")
+    response_after_reactivation = gateway.execute(ToolRequest(
+        "r-recovered", "agent:secuagent", "siem.query",
+        "event.read", "target", frozenset({"event.read"})
+    ))
+    assert response_after_reactivation.success
+    assert adapter.calls == 1
+
 
 
 def test_package_cannot_execute_undeclared_tool():
