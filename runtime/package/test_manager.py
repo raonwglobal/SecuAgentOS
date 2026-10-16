@@ -72,3 +72,63 @@ def test_quarantine_rejects_package_that_was_never_active():
     else:
         raise AssertionError("inactive package cannot be quarantined as active")
 
+def test_quarantined_package_requires_explicit_recovery_and_fresh_verification():
+    trust = Trust()
+    runtime = Runtime()
+    audit = MemoryAuditSink()
+    pm = PackageManager(trust, runtime, audit)
+    pm.discover(manifest())
+    pm.verify("secuagent")
+    pm.stage("secuagent")
+    pm.install("secuagent")
+    pm.activate("secuagent")
+    pm.quarantine("secuagent", reason="integrity_alert")
+
+    try:
+        pm.verify("secuagent")
+    except RuntimeError as exc:
+        assert str(exc) == "package_quarantined_requires_recovery"
+    else:
+        raise AssertionError("ordinary verification must not bypass quarantine")
+
+    try:
+        pm.recover_quarantined("secuagent", approved_by="security-reviewer", reason="review")
+    except PermissionError as exc:
+        assert str(exc) == "trust_verification_failed"
+    else:
+        raise AssertionError("untrusted package must not recover")
+    assert pm.get("secuagent").state is PackageState.QUARANTINED
+    assert audit.records[-1]["event"] == "quarantine_recovery_failed"
+
+    trust.valid = True
+    recovered = pm.recover_quarantined(
+        "secuagent", approved_by="security-reviewer", reason="integrity-cleared"
+    )
+    assert recovered.state is PackageState.VERIFIED
+    assert audit.records[-1]["event"] == "quarantine_recovery_approved"
+    assert audit.records[-1]["approved_by"] == "security-reviewer"
+
+    try:
+        pm.recover_quarantined("secuagent", approved_by="reviewer", reason="again")
+    except RuntimeError as exc:
+        assert str(exc) == "package_not_quarantined"
+    else:
+        raise AssertionError("recovery must only apply to quarantined packages")
+
+
+def test_quarantine_recovery_requires_auditable_approval_fields():
+    pm = manager()
+    pm.discover(manifest())
+    pm.verify("secuagent")
+    pm.stage("secuagent")
+    pm.install("secuagent")
+    pm.activate("secuagent")
+    pm.quarantine("secuagent")
+    for approver, reason in (("", "review"), ("reviewer", "  ")):
+        try:
+            pm.recover_quarantined("secuagent", approved_by=approver, reason=reason)
+        except ValueError as exc:
+            assert str(exc) == "recovery_approval_and_reason_required"
+        else:
+            raise AssertionError("recovery requires approver and reason")
+
