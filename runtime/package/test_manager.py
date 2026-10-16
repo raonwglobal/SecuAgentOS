@@ -73,7 +73,7 @@ def test_quarantine_rejects_package_that_was_never_active():
         raise AssertionError("inactive package cannot be quarantined as active")
 
 def test_quarantined_package_requires_explicit_recovery_and_fresh_verification():
-    trust = Trust()
+    trust = Trust(valid=False)
     runtime = Runtime()
     audit = MemoryAuditSink()
     pm = PackageManager(trust, runtime, audit)
