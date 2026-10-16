@@ -69,6 +69,8 @@ class PackageManager:
 
     def verify(self, name: str) -> PackageRecord:
         record = self._packages[name]
+        if record.state is PackageState.QUARANTINED:
+            raise RuntimeError("package_quarantined_requires_recovery")
         if not self._trust.verify(record.manifest):
             record.state = PackageState.REJECTED
             self._audit.append({"package": name, "state": record.state.value, "event": "verify_failed"})
@@ -118,6 +120,39 @@ class PackageManager:
             "state": record.state.value,
             "event": "quarantine",
             "reason": reason,
+        })
+        return record
+
+    def recover_quarantined(
+        self, name: str, approved_by: str, reason: str
+    ) -> PackageRecord:
+        """Re-verify an explicitly approved quarantined package without activating it."""
+        record = self._packages[name]
+        if record.state is not PackageState.QUARANTINED:
+            raise RuntimeError("package_not_quarantined")
+        if not approved_by.strip() or not reason.strip():
+            raise ValueError("recovery_approval_and_reason_required")
+
+        if not self._trust.verify(record.manifest):
+            self._audit.append({
+                "package": name, "state": record.state.value,
+                "event": "quarantine_recovery_failed", "reason": reason,
+                "approved_by": approved_by, "failure": "trust_verification_failed",
+            })
+            raise PermissionError("trust_verification_failed")
+        if not self._runtime.compatible(record.manifest.runtime_min):
+            self._audit.append({
+                "package": name, "state": record.state.value,
+                "event": "quarantine_recovery_failed", "reason": reason,
+                "approved_by": approved_by, "failure": "runtime_incompatible",
+            })
+            raise PermissionError("runtime_incompatible")
+
+        record.state = PackageState.VERIFIED
+        self._audit.append({
+            "package": name, "state": record.state.value,
+            "event": "quarantine_recovery_approved", "reason": reason,
+            "approved_by": approved_by,
         })
         return record
 
