@@ -73,7 +73,7 @@ def test_quarantine_rejects_package_that_was_never_active():
         raise AssertionError("inactive package cannot be quarantined as active")
 
 def test_quarantined_package_requires_explicit_recovery_and_fresh_verification():
-    trust = Trust(valid=False)
+    trust = Trust()
     runtime = Runtime()
     audit = MemoryAuditSink()
     pm = PackageManager(trust, runtime, audit)
@@ -91,6 +91,7 @@ def test_quarantined_package_requires_explicit_recovery_and_fresh_verification()
     else:
         raise AssertionError("ordinary verification must not bypass quarantine")
 
+    trust.valid = False
     try:
         pm.recover_quarantined("secuagent", approved_by="security-reviewer", reason="review")
     except PermissionError as exc:
