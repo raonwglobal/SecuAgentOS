@@ -168,14 +168,14 @@ class PackageManager:
             self._audit.append({
                 "package": name, "state": record.state.value,
                 "event": "quarantine_recovery_failed", "reason": reason,
-                "approved_by": approved_by, "failure": "trust_verification_failed",
+                "approved_by": approval.approver_id, "failure": "trust_verification_failed",
             })
             raise PermissionError("trust_verification_failed")
         if not self._runtime.compatible(record.manifest.runtime_min):
             self._audit.append({
                 "package": name, "state": record.state.value,
                 "event": "quarantine_recovery_failed", "reason": reason,
-                "approved_by": approved_by, "failure": "runtime_incompatible",
+                "approved_by": approval.approver_id, "failure": "runtime_incompatible",
             })
             raise PermissionError("runtime_incompatible")
 
@@ -183,7 +183,7 @@ class PackageManager:
         self._audit.append({
             "package": name, "state": record.state.value,
             "event": "quarantine_recovery_approved", "reason": reason,
-            "approved_by": approved_by,
+            "approved_by": approval.approver_id,
         })
         return record
 
