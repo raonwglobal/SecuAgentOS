@@ -35,6 +35,12 @@ class PackageRecord:
     manifest: PackageManifest
     state: PackageState = PackageState.DISCOVERED
 
+@dataclass(frozen=True)
+class RecoveryApproval:
+    """Approval identity plus opaque credential issued by a trusted identity service."""
+    approver_id: str
+    credential: str
+
 class TrustVerifier(Protocol):
     def verify(self, manifest: PackageManifest) -> bool: ...
 
@@ -44,9 +50,9 @@ class RuntimeCompatibility(Protocol):
 class PackageAudit(Protocol):
     def append(self, record: Mapping[str, object]) -> None: ...
 
-class RecoveryApprovalPolicy(Protocol):
-    """Authoritative policy for validating a recovery approver and scope."""
-    def allows(self, approver: str, package_name: str, reason: str) -> bool: ...
+class RecoveryApprovalVerifier(Protocol):
+    """Verifies an opaque approval credential and its package/reason scope."""
+    def verify(self, approval: RecoveryApproval, package_name: str, reason: str) -> bool: ...
 
 class PackageSandbox:
     def context(self, manifest: PackageManifest) -> Mapping[str, object]:
@@ -61,10 +67,10 @@ class PackageSandbox:
 class PackageManager:
     def __init__(
         self, trust: TrustVerifier, runtime: RuntimeCompatibility, audit: PackageAudit,
-        recovery_approval_policy: RecoveryApprovalPolicy | None = None,
+        recovery_approval_verifier: RecoveryApprovalVerifier | None = None,
     ) -> None:
         self._trust, self._runtime, self._audit = trust, runtime, audit
-        self._recovery_approval_policy = recovery_approval_policy
+        self._recovery_approval_verifier = recovery_approval_verifier
         self._packages: dict[str, PackageRecord] = {}
 
     def discover(self, manifest: PackageManifest) -> PackageRecord:
@@ -132,21 +138,21 @@ class PackageManager:
         return record
 
     def recover_quarantined(
-        self, name: str, approved_by: str, reason: str
+        self, name: str, approval: RecoveryApproval, reason: str
     ) -> PackageRecord:
         """Re-verify an explicitly approved quarantined package without activating it."""
         record = self._packages[name]
         if record.state is not PackageState.QUARANTINED:
             raise RuntimeError("package_not_quarantined")
-        if not approved_by.strip() or not reason.strip():
+        if not approval.approver_id.strip() or not approval.credential.strip() or not reason.strip():
             raise ValueError("recovery_approval_and_reason_required")
 
-        # A caller-provided identity string is not proof of identity or authority.
-        # Missing, denying, or failing policy implementations must never authorize recovery.
-        policy = self._recovery_approval_policy
+        # The opaque credential must be verified by a trusted identity/approval service.
+        # Never treat a caller-provided approver name as authentication.
+        verifier = self._recovery_approval_verifier
         try:
-            authorized = policy is not None and policy.allows(
-                approved_by, name, reason
+            authorized = verifier is not None and verifier.verify(
+                approval, name, reason
             ) is True
         except Exception:
             authorized = False
@@ -154,7 +160,7 @@ class PackageManager:
             self._audit.append({
                 "package": name, "state": record.state.value,
                 "event": "quarantine_recovery_denied", "reason": reason,
-                "approved_by": approved_by, "failure": "approver_not_authorized",
+                "approved_by": approval.approver_id, "failure": "approver_not_authorized",
             })
             raise PermissionError("recovery_approver_not_authorized")
 
