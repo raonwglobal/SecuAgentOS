@@ -1,7 +1,7 @@
 from kernel.security.control import MemoryAuditSink, SecurityController, StaticPolicy
 from runtime.agent.runtime import AgentRuntime, AgentState
 from runtime.integration.application import ApplicationRuntime
-from runtime.package.manager import PackageManager, PackageManifest
+from runtime.package.manager import PackageManager, PackageManifest, RecoveryApproval
 
 class Trust:
     def verify(self, manifest): return True
@@ -9,9 +9,15 @@ class Trust:
 class Runtime:
     def compatible(self, minimum_version): return True
 
-class RecoveryApprovalPolicy:
-    def allows(self, approver, package_name, reason):
-        return approver == "security-reviewer" and package_name == "secuagent" and bool(reason.strip())
+class RecoveryApprovalVerifier:
+    def verify(self, approval, package_name, reason):
+        return (approval.approver_id == "security-reviewer"
+                and approval.credential == "trusted-token"
+                and package_name == "secuagent" and bool(reason.strip()))
+
+
+def recovery_approval():
+    return RecoveryApproval("security-reviewer", "trusted-token")
 
 class Adapter:
     def __init__(self): self.calls = 0
@@ -22,7 +28,7 @@ class Adapter:
 def make_package_manager():
     return PackageManager(
         Trust(), Runtime(), MemoryAuditSink(),
-        recovery_approval_policy=RecoveryApprovalPolicy(),
+        recovery_approval_verifier=RecoveryApprovalVerifier(),
     )
 
 def install_package(pm, manifest):
@@ -252,7 +258,7 @@ def test_quarantining_package_revokes_agent_and_tool_execution():
     assert adapter.calls == 0
 
     recovered = pm.recover_quarantined(
-        "secuagent", approved_by="security-reviewer", reason="integrity-cleared"
+        "secuagent", approval=recovery_approval(), reason="integrity-cleared"
     )
     assert recovered.state.value == "VERIFIED"
     assert not app.is_executable("agent:secuagent")
