@@ -1,4 +1,4 @@
-from runtime.package.manager import PackageManager, PackageManifest, PackageState
+from runtime.package.manager import PackageManager, PackageManifest, PackageState, RecoveryApproval
 from kernel.security.control import MemoryAuditSink
 
 class Trust:
@@ -9,10 +9,16 @@ class Runtime:
     def __init__(self, compatible=True): self.value = compatible
     def compatible(self, minimum_version): return self.value
 
-class ApprovalPolicy:
-    def __init__(self, allowed=True): self.allowed = allowed
-    def allows(self, approver, package_name, reason):
-        return self.allowed and approver == "security-reviewer" and package_name == "secuagent"
+class ApprovalVerifier:
+    def __init__(self, valid=True): self.valid = valid
+    def verify(self, approval, package_name, reason):
+        return (self.valid and approval.credential == "trusted-token"
+                and approval.approver_id == "security-reviewer"
+                and package_name == "secuagent" and bool(reason.strip()))
+
+
+def approval(credential="trusted-token"):
+    return RecoveryApproval("security-reviewer", credential)
 
 def manifest():
     return PackageManifest("secuagent", "1.0.0", "security-application", "0.5.0", frozenset({"threat.detect", "incident.analyze"}), frozenset({"event.read"}), frozenset({"siem.query"}), {"cpu":"2","memory":"4Gi"}, {"allowed":("siem.internal",)}, "raonwglobal", "test-signature")
@@ -81,7 +87,7 @@ def test_quarantined_package_requires_explicit_recovery_and_fresh_verification()
     trust = Trust()
     runtime = Runtime()
     audit = MemoryAuditSink()
-    pm = PackageManager(trust, runtime, audit, recovery_approval_policy=ApprovalPolicy())
+    pm = PackageManager(trust, runtime, audit, recovery_approval_verifier=ApprovalVerifier())
     pm.discover(manifest())
     pm.verify("secuagent")
     pm.stage("secuagent")
@@ -98,7 +104,7 @@ def test_quarantined_package_requires_explicit_recovery_and_fresh_verification()
 
     trust.valid = False
     try:
-        pm.recover_quarantined("secuagent", approved_by="security-reviewer", reason="review")
+        pm.recover_quarantined("secuagent", approval=approval(), reason="review")
     except PermissionError as exc:
         assert str(exc) == "trust_verification_failed"
     else:
@@ -108,14 +114,14 @@ def test_quarantined_package_requires_explicit_recovery_and_fresh_verification()
 
     trust.valid = True
     recovered = pm.recover_quarantined(
-        "secuagent", approved_by="security-reviewer", reason="integrity-cleared"
+        "secuagent", approval=approval(), reason="integrity-cleared"
     )
     assert recovered.state is PackageState.VERIFIED
     assert audit.records[-1]["event"] == "quarantine_recovery_approved"
     assert audit.records[-1]["approved_by"] == "security-reviewer"
 
     try:
-        pm.recover_quarantined("secuagent", approved_by="reviewer", reason="again")
+        pm.recover_quarantined("secuagent", approval=RecoveryApproval("reviewer", "trusted-token"), reason="again")
     except RuntimeError as exc:
         assert str(exc) == "package_not_quarantined"
     else:
@@ -133,7 +139,7 @@ def test_quarantine_recovery_fails_closed_without_approver_policy():
     pm.quarantine("secuagent")
 
     try:
-        pm.recover_quarantined("secuagent", approved_by="security-reviewer", reason="review")
+        pm.recover_quarantined("secuagent", approval=approval(), reason="review")
     except PermissionError as exc:
         assert str(exc) == "recovery_approver_not_authorized"
     else:
@@ -143,7 +149,7 @@ def test_quarantine_recovery_fails_closed_without_approver_policy():
 
 def test_quarantine_recovery_rejects_unauthorized_approver():
     audit = MemoryAuditSink()
-    pm = PackageManager(Trust(), Runtime(), audit, recovery_approval_policy=ApprovalPolicy(allowed=False))
+    pm = PackageManager(Trust(), Runtime(), audit, recovery_approval_verifier=ApprovalVerifier(valid=False))
     pm.discover(manifest())
     pm.verify("secuagent")
     pm.stage("secuagent")
@@ -152,13 +158,33 @@ def test_quarantine_recovery_rejects_unauthorized_approver():
     pm.quarantine("secuagent")
 
     try:
-        pm.recover_quarantined("secuagent", approved_by="security-reviewer", reason="review")
+        pm.recover_quarantined("secuagent", approval=approval(), reason="review")
     except PermissionError as exc:
         assert str(exc) == "recovery_approver_not_authorized"
     else:
         raise AssertionError("unauthorized approver must be denied")
     assert pm.get("secuagent").state is PackageState.QUARANTINED
     assert audit.records[-1]["event"] == "quarantine_recovery_denied"
+
+
+
+def test_quarantine_recovery_rejects_invalid_approval_credential():
+    audit = MemoryAuditSink()
+    pm = PackageManager(Trust(), Runtime(), audit, recovery_approval_verifier=ApprovalVerifier())
+    pm.discover(manifest())
+    pm.verify("secuagent")
+    pm.stage("secuagent")
+    pm.install("secuagent")
+    pm.activate("secuagent")
+    pm.quarantine("secuagent")
+    try:
+        pm.recover_quarantined("secuagent", approval=approval("forged-token"), reason="review")
+    except PermissionError as exc:
+        assert str(exc) == "recovery_approver_not_authorized"
+    else:
+        raise AssertionError("invalid credential must be denied")
+    assert pm.get("secuagent").state is PackageState.QUARANTINED
+    assert "credential" not in audit.records[-1]
 
 
 def test_quarantine_recovery_requires_auditable_approval_fields():
@@ -171,7 +197,7 @@ def test_quarantine_recovery_requires_auditable_approval_fields():
     pm.quarantine("secuagent")
     for approver, reason in (("", "review"), ("reviewer", "  ")):
         try:
-            pm.recover_quarantined("secuagent", approved_by=approver, reason=reason)
+            pm.recover_quarantined("secuagent", approval=RecoveryApproval(approver, "trusted-token"), reason=reason)
         except ValueError as exc:
             assert str(exc) == "recovery_approval_and_reason_required"
         else:
