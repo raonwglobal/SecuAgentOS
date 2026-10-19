@@ -44,6 +44,10 @@ class RuntimeCompatibility(Protocol):
 class PackageAudit(Protocol):
     def append(self, record: Mapping[str, object]) -> None: ...
 
+class RecoveryApprovalPolicy(Protocol):
+    """Authoritative policy for validating a recovery approver and scope."""
+    def allows(self, approver: str, package_name: str, reason: str) -> bool: ...
+
 class PackageSandbox:
     def context(self, manifest: PackageManifest) -> Mapping[str, object]:
         return {
@@ -55,8 +59,12 @@ class PackageSandbox:
         }
 
 class PackageManager:
-    def __init__(self, trust: TrustVerifier, runtime: RuntimeCompatibility, audit: PackageAudit) -> None:
+    def __init__(
+        self, trust: TrustVerifier, runtime: RuntimeCompatibility, audit: PackageAudit,
+        recovery_approval_policy: RecoveryApprovalPolicy | None = None,
+    ) -> None:
         self._trust, self._runtime, self._audit = trust, runtime, audit
+        self._recovery_approval_policy = recovery_approval_policy
         self._packages: dict[str, PackageRecord] = {}
 
     def discover(self, manifest: PackageManifest) -> PackageRecord:
@@ -132,6 +140,23 @@ class PackageManager:
             raise RuntimeError("package_not_quarantined")
         if not approved_by.strip() or not reason.strip():
             raise ValueError("recovery_approval_and_reason_required")
+
+        # A caller-provided identity string is not proof of identity or authority.
+        # Missing, denying, or failing policy implementations must never authorize recovery.
+        policy = self._recovery_approval_policy
+        try:
+            authorized = policy is not None and policy.allows(
+                approved_by, name, reason
+            ) is True
+        except Exception:
+            authorized = False
+        if not authorized:
+            self._audit.append({
+                "package": name, "state": record.state.value,
+                "event": "quarantine_recovery_denied", "reason": reason,
+                "approved_by": approved_by, "failure": "approver_not_authorized",
+            })
+            raise PermissionError("recovery_approver_not_authorized")
 
         if not self._trust.verify(record.manifest):
             self._audit.append({
