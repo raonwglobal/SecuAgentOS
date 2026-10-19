@@ -9,6 +9,10 @@ class Trust:
 class Runtime:
     def compatible(self, minimum_version): return True
 
+class RecoveryApprovalPolicy:
+    def allows(self, approver, package_name, reason):
+        return approver == "security-reviewer" and package_name == "secuagent" and bool(reason.strip())
+
 class Adapter:
     def __init__(self): self.calls = 0
     def execute(self, request):
@@ -16,7 +20,10 @@ class Adapter:
         return {"status": "ok"}
 
 def make_package_manager():
-    return PackageManager(Trust(), Runtime(), MemoryAuditSink())
+    return PackageManager(
+        Trust(), Runtime(), MemoryAuditSink(),
+        recovery_approval_policy=RecoveryApprovalPolicy(),
+    )
 
 def install_package(pm, manifest):
     pm.discover(manifest)
