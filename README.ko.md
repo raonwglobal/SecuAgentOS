@@ -1,59 +1,81 @@
-# Luna Chat Coder
+# SecuAgentOS
 
-[English README](README.md)
+**x86-64 하드웨어와 가상 머신을 위한 보안 특화 Agent 운영체제 기반**
 
-**Version 0.1.5**
+SecuAgentOS는 보안 에이전트와 외부 보안 솔루션을 설치·격리·인가·감사·운영하기 위한 OS 및 런타임 플랫폼입니다. SecuAgentOS 자체가 단일 보안 애플리케이션이 되는 것이 아니라, 별도 패키지로 제공되는 SecuAgent 및 다른 보안 솔루션을 실행하는 기반을 목표로 합니다.
 
-평소 쓰는 ChatGPT 웹 채팅으로 실제 GitHub 리포지토리 작업을 해보세요. 별도의 로컬 코딩 에이전트를 띄우거나, 터널을 열거나, 내 컴퓨터를 채팅에 연결할 필요가 없습니다.
+## 현재 개발 상태
 
-ChatGPT에는 이미 코드를 실행할 수 있는 샌드박스가 있습니다. 다만 네트워크 접근이 제한될 수 있어서 소스를 가져오고, 의존성을 준비하고, 큰 변경을 안정적으로 게시하는 단계에서 작업이 쉽게 막힙니다. Luna는 이 내장 샌드박스에서 개발 작업을 이어가고, 부족한 부분만 연결된 GitHub를 통해 보완하도록 모델에게 알려줍니다.
+- x86-64 및 Ubuntu Server 24.04 LTS 기반 VM 프로토타입
+- Security Control Plane, Agent Runtime, Package Manager 및 Tool Gateway의 핵심 제어 계약
+- 패키지 권한 검증, 격리 상태 및 복구 승인에 대한 Python 단위 테스트
+- GitHub Actions에서 Ubuntu VM 빌드, QEMU 부팅 및 readiness marker 검증
+- 설치 ISO, Proxmox 배포, 운영 인증·감사 저장소, 패키지 서명, 실제 SecuAgent 통합은 추가 검증/구현 필요
 
-## 무엇이 좋아지나요?
+현재 프로젝트는 개발 프로토타입이며 운영 환경에 바로 사용할 수 있는 완성된 보안 OS가 아닙니다. 최신 검증 결과는 [GitHub Actions](https://github.com/raonwglobal/SecuAgentOS/actions)를 확인하세요.
 
-- **내장 샌드박스를 제대로 활용합니다.** 편집, 빌드, 테스트, 디버깅은 가능한 한 채팅 안의 샌드박스에서 이어갑니다.
-- **환경 문제에 덜 막힙니다.** 평소 경로로 어떤 단계를 안정적으로 끝낼 수 없을 때는 필요한 부분만 GitHub를 이용해 처리하고, 전체 작업을 다른 환경으로 옮기지 않습니다.
-- **중간에 끊겨도 다시 이어가기 쉽습니다.** Chat이나 sandbox가 사라져도 대화 내용을 바탕으로 코드를 다시 만드는 대신 정확한 GitHub 상태에서 복구합니다.
-- **작업 인계를 더 확실하게 합니다.** 저장소 파일을 유의미한 분량으로 작성·수정한 뒤에는 채팅이 직접 파일 다운로드를 지원할 경우 전체 sandbox workspace snapshot을 제공할 수 있고, 실제로 게시된 상태도 확인한 뒤 완료를 보고합니다.
-
-목표는 단순합니다. 새 인프라를 운영하는 대신, 채팅에 리포지토리와 개발 작업만 알려주는 것입니다.
-
-## 빠른 시작
-
-이 리포지토리가 문서화하는 ChatGPT Web 환경에서는 다음과 같이 설정합니다.
-
-1. **Use this template → Create a new repository**를 선택합니다.
-2. ChatGPT의 <https://chatgpt.com/plugins>에서 **GitHub Plugin**을 설치하고 연결합니다.
-3. GitHub에서 <https://github.com/apps/chatgpt-codex-connector>의 **ChatGPT Codex Connector**를 설치하고 새 리포지토리에 접근 권한을 부여합니다. 이미 일부 리포지토리만 허용하도록 설치했다면 새 리포지토리를 그 목록에 추가합니다.
-4. 일반 ChatGPT 대화에서 리포지토리 URL과 원하는 개발 작업을 보냅니다. 예를 들어 변경을 구현하고 pull request를 열어 달라고 요청할 수 있습니다.
-
-평소 사용법은 여기까지입니다. 이 template으로 만든 리포지토리에는 Luna가 이미 들어 있고, Luna 이름을 따로 언급하거나 내부 우회 절차를 직접 운영할 필요가 없어야 합니다.
-
-Organization 정책에 따라 Plugin이나 GitHub App 사용에 관리자 승인이 필요할 수 있습니다.
-
-## 어떻게 동작하나요?
-
-Luna는 리포지토리 자체의 지침과 요구사항을 읽고, 작업해야 할 정확한 소스를 복구한 뒤, 평소 편집과 테스트는 chat sandbox에서 진행합니다.
-
-샌드박스의 직접 접근만으로 부족한 단계는 먼저 연결된 GitHub 경로를 이용합니다. 그 경로로도 해당 단계를 안정적으로 끝내기 어렵다면 제한된 GitHub Actions 실행으로 처리한 뒤, 가능하면 다시 샌드박스에서 작업을 이어갑니다. GitHub Actions는 기본 개발환경으로 사용하지 않습니다.
-
-## 기존 리포지토리에 추가
-
-다음 skill directory 전체를 복사합니다.
+## 아키텍처
 
 ```text
-.agents/skills/luna-chat-coder/
+x86-64 hardware / VM
+        |
+Ubuntu Linux foundation (kernel, systemd, filesystem, networking)
+        |
+SecuAgentOS platform
+  - Security Control Plane
+  - Identity / Policy / Capability / Risk / Audit
+  - Agent Runtime
+  - Package Manager and sandbox boundary
+  - Tool Gateway
+        |
+Installable security packages
+  - SecuAgent (future integration)
+  - EDR / SIEM / IAM / Firewall integrations
 ```
 
-그 다음 [`AGENTS.md`](AGENTS.md)의 짧은 Luna entry-point instruction을 대상 리포지토리의 기존 agent instruction에 합칩니다. 프로젝트 자체의 engineering guidance는 그대로 두십시오. Luna는 그것을 대체하지 않고 주변에서 작업을 이어가기 쉽게 돕습니다.
+Ubuntu는 기반 OS이며 보안 정책의 최종 권한 주체는 SecuAgentOS를 목표로 합니다. 외부 보안 도구는 Tool Gateway의 정책·권한·감사 경계를 통해 호출되어야 합니다.
 
-이 리포지토리가 문서화하는 ChatGPT Web 환경에서는 작업을 요청하기 전에 GitHub Plugin을 연결하고 ChatGPT Codex Connector에 해당 리포지토리 접근 권한을 부여합니다.
+## VM 개발
 
-## 문서
+Ubuntu x86-64 VM 빌드와 실행:
 
-일반 작업에서 쓰는 동작은 [`SKILL.md`](.agents/skills/luna-chat-coder/SKILL.md)에 정의되어 있습니다. 필요할 때 사용하는 세부 절차는 [`actions-missions.md`](.agents/skills/luna-chat-coder/references/actions-missions.md)와 [`recovery.md`](.agents/skills/luna-chat-coder/references/recovery.md)에 있습니다. [`design-rationale.md`](.agents/skills/luna-chat-coder/references/design-rationale.md)는 Luna 자체를 변경할 때 참고하는 maintainer memory이며, 일반 skill 동작은 이 문서를 읽지 않아도 완결됩니다.
+```sh
+tools/vm/build.sh
+tools/vm/run.sh
+tools/vm/health-check.sh
+```
 
-Luna는 Agent Skills 구조를 따릅니다. 이 리포지토리가 문서화하고 검증하는 환경은 ChatGPT Web이며, 다른 host도 동등한 sandbox와 GitHub 기능을 실제로 제공한다면 같은 skill을 사용할 수 있습니다.
+CI는 VM 이미지 생성과 QEMU 부팅을 검증합니다. 이 결과만으로 Installer ISO의 무인 설치, Proxmox 실환경 부팅 또는 물리 하드웨어 호환성이 검증되었다고 볼 수 없습니다.
+
+## 개발 문서
+
+설계·구현 계획·검증 현황은 [`docs/dev/`](docs/dev/) 아래에 주제별로 기록합니다. 최신 통합 갭과 순차 실행 계획은 [Repository Integration Audit](docs/dev/08-testing-validation/04-repository-integration-audit-2026-10-20.md)을 참고하세요.
+
+## SecuAgent와의 관계
+
+- `SecuAgentOS`: OS/플랫폼 및 런타임
+- `raonwglobal/SecuAgent`: 향후 SecuAgentOS에 설치할 별도 보안 애플리케이션/규칙 패키지 대상
+
+개발 보조 도구는 OS 런타임 구성요소가 아니며 SecuAgentOS 제품 코드와 분리합니다.
+
+## 로드맵
+
+1. Ubuntu VM 부팅 및 CI 안정화
+2. cloud-init 프로토타입을 실제 SecuAgentOS systemd 서비스로 대체
+3. OS 수준 애플리케이션 격리 강화
+4. 패키지 서명 및 발행자 신뢰 검증
+5. `sos` 패키지 관리 CLI 구현
+6. SecuAgent 설치 패키지 통합
+7. 실제 SIEM/EDR/IAM/방화벽 어댑터
+8. 공유 에이전트 컨텍스트 및 메모리
+9. 자율 관찰·진단·조치·검증·롤백 루프
+10. 물리 x86-64 하드웨어 검증
+11. 재현 가능하고 서명된 OS/패키지 릴리스
+
+## 보안 경계
+
+현재 코드와 CI는 일부 보안 제어 계약을 검증하는 프로토타입입니다. 실제 IdP 연동, 변조 방지 감사 저장, 운영용 패키지 서명, OS 수준 격리, 보안 릴리스 검증은 별도 완료 조건입니다.
 
 ## 라이선스
 
-MIT. [`LICENSE`](LICENSE)를 참고하십시오.
+저장소에 포함된 `LICENSE` 및 각 구성요소의 개별 라이선스를 참고하세요.
