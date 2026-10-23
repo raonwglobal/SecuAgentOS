@@ -2,8 +2,11 @@ name: x86-64 VM Bootstrap
 
 on:
   push:
-    branches: [main, architecture/x86-64-vm-v1]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   vm-bootstrap:
@@ -50,10 +53,10 @@ jobs:
         run: |
           set -eu
           test -s .build/vm/secuagentos-x86_64-ubuntu24.04.img
-          test -s .build/vm/secuagentos-x86-64-cloud-init.iso || test -s .build/vm/secuagentos-x86_64-cloud-init.iso
+          test -s .build/vm/secuagentos-x86-64-cloud-init.iso
           qemu-img info .build/vm/secuagentos-x86_64-ubuntu24.04.img
           sha256sum -c .build/vm/secuagentos-x86_64-ubuntu24.04.img.sha256
-          sha256sum -c .build/vm/secuagentos-x86_64-cloud-init.iso.sha256
+          sha256sum -c .build/vm/secuagentos-x86-64-cloud-init.iso.sha256
 
       - name: Boot Ubuntu VM and wait for readiness
         shell: bash
@@ -67,9 +70,6 @@ jobs:
           deadline=$((SECONDS + 240))
           ready=0
           while [ "$SECONDS" -lt "$deadline" ]; do
-            # Health is emitted by the early bootstrap stage. Wait for the
-            # full cloud-init/systemd chain so Foundation and Agent Runtime
-            # readiness checks do not race provisioning.
             if grep -q 'SECUAGENTOS_FOUNDATION_INTEGRATED=READY' vm-boot.log 2>/dev/null \
               && grep -q 'SECUAGENTOS_AGENT_RUNTIME=READY' vm-boot.log 2>/dev/null; then
               ready=1
@@ -103,7 +103,6 @@ jobs:
             'SECUAGENTOS_AGENT_RUNTIME=READY'; do
             grep -q "$marker" vm-boot.log || { echo "Missing boot marker: $marker"; exit 1; }
           done
-
 
       - name: Verify Foundation services
         shell: bash
