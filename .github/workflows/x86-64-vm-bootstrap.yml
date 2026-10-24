@@ -43,6 +43,18 @@ jobs:
       - name: Static smoke contract
         run: sh tests/vm/smoke.sh
 
+      - name: Validate integrated installer builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n tools/vm/installer/build-installer-v2.sh
+          set +e
+          SECUAGENTOS_PASSWORD_HASH= sh tools/vm/installer/build-installer-v2.sh > installer-guard.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -eq 2
+          grep -q 'SECUAGENTOS_PASSWORD_HASH is required' installer-guard.log
+
       - name: Build Ubuntu x86-64 VM artifact
         shell: bash
         run: |
