@@ -53,10 +53,10 @@ jobs:
         run: |
           set -eu
           test -s .build/vm/secuagentos-x86_64-ubuntu24.04.img
-          test -s .build/vm/secuagentos-x86-64-cloud-init.iso
+          test -s .build/vm/secuagentos-x86_64-cloud-init.iso
           qemu-img info .build/vm/secuagentos-x86_64-ubuntu24.04.img
           sha256sum -c .build/vm/secuagentos-x86_64-ubuntu24.04.img.sha256
-          sha256sum -c .build/vm/secuagentos-x86-64-cloud-init.iso.sha256
+          sha256sum -c .build/vm/secuagentos-x86_64-cloud-init.iso.sha256
 
       - name: Boot Ubuntu VM and wait for readiness
         shell: bash
