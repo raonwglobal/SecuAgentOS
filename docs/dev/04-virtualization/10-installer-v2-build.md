@@ -1,34 +1,21 @@
-# Installer ISO v2 Build
+# Installer ISO v2 — integrated autoinstall
 
-## 목표
+## Goal
 
-Ubuntu Server 24.04 설치 미디어를 기반으로 SecuAgentOS 자동 설치 구조를 준비한다.
+Produce one bootable Ubuntu Server 24.04 amd64 ISO with the SecuAgentOS NoCloud autoinstall seed embedded and GRUB boot entries configured for unattended installation.
 
-## 현재 구현
+## Build
 
-- Ubuntu Server 24.04 amd64 base ISO 다운로드
-- SHA256 기록
-- reproducible installer workspace
-- autoinstall contract 연결
-- Foundation 및 Service Manager 설치 경계 정의
+Provide a deployment-specific SHA-512 crypt password hash through a secure environment variable. Do not commit credentials or use a shared/default password.
 
-## 다음 검증
-
-실제 ISO 내부에 autoinstall seed를 삽입하고 QEMU에서 unattended installation을 수행한다.
-
-성공 기준:
-
-```text
-UEFI boot
-  -> Ubuntu autoinstall
-  -> reboot
-  -> systemd
-  -> SecuAgentOS Foundation
-  -> Service Manager
-  -> SYSTEM_READY
-  -> HEALTH=READY
+```sh
+SECUAGENTOS_PASSWORD_HASH='<SHA-512 crypt hash>' tools/vm/installer/build-installer-v2.sh
 ```
 
-## Bootstrap activation fix
+The builder refuses to run without a valid hash. It downloads the Ubuntu base ISO, injects the NoCloud user-data and meta-data into the installer ISO, patches BIOS and UEFI GRUB Linux entries with the autoinstall/NoCloud kernel arguments, replays the original boot metadata with xorriso, and writes a SHA256 checksum.
 
-Cloud-init may finish after `multi-user.target` has already been reached. The VM provisioning step therefore uses `systemctl enable --now` so SecuAgentOS bootstrap is both enabled for future boots and started immediately on the current boot.
+Output: `.build/vm/installer-v2/secuagentos-x86_64-installer-v2.iso`.
+
+## Validation status
+
+The existing VM bootstrap CI passing does not by itself prove unattended installer behavior. The next validation is to boot this exact generated ISO under QEMU/OVMF, verify autoinstall reaches reboot, and confirm SecuAgentOS Foundation and health markers on the installed disk. Do not distribute an ISO until that end-to-end validation succeeds.
