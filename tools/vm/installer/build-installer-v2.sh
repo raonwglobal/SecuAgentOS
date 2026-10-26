@@ -79,6 +79,8 @@ for path in paths:
                 line += " " + args
             patched += 1
         output.append(line)
+    # xorriso may restore ISO files read-only; make the extracted menu writable before patching.
+    path.chmod(path.stat().st_mode | 0o200)
     path.write_text("\n".join(output) + "\n")
 if patched == 0:
     raise SystemExit("no GRUB Linux boot entries were patched; refusing to emit non-autoinstall ISO")
