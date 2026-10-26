@@ -11,7 +11,7 @@ permissions:
 jobs:
   vm-bootstrap:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,6 +54,24 @@ jobs:
           set -e
           test "$rc" -eq 2
           grep -q 'SECUAGENTOS_PASSWORD_HASH is required' installer-guard.log
+
+      - name: Build and inspect integrated installer ISO (CI-only credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This ISO is test-only and is intentionally not uploaded as an artifact.
+          export SECUAGENTOS_PASSWORD_HASH="$(openssl passwd -6 -salt SecuAgentCI 'ci-only-not-for-deployment')"
+          sh tools/vm/installer/build-installer-v2.sh
+          iso=.build/vm/installer-v2/secuagentos-x86_64-installer-v2.iso
+          test -s "$iso"
+          test -s "$iso.sha256"
+          sha256sum -c "$iso.sha256"
+          xorriso -indev "$iso" -ls /nocloud/ | tee installer-iso-seed.log
+          grep -q 'user-data' installer-iso-seed.log
+          grep -q 'meta-data' installer-iso-seed.log
+          xorriso -osirrox on -indev "$iso" -extract /boot/grub/grub.cfg .build/vm/installer-v2/verified-grub.cfg
+          grep -q 'autoinstall' .build/vm/installer-v2/verified-grub.cfg
+          grep -q 'ds=nocloud' .build/vm/installer-v2/verified-grub.cfg
 
       - name: Build Ubuntu x86-64 VM artifact
         shell: bash
