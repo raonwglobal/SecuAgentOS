@@ -63,7 +63,7 @@ fi
 GRUB_CFG="$GRUB_CFG" EFI_GRUB_CFG="$EFI_GRUB_CFG" python3 - <<'PY'
 import os, re
 from pathlib import Path
-args = r"autoinstall ds=nocloud\;s=/cdrom/nocloud/"
+args = r"autoinstall ds=nocloud\;s=/cdrom/nocloud/ console=ttyS0,115200n8"
 paths = [Path(os.environ["GRUB_CFG"]), Path(os.environ["EFI_GRUB_CFG"])]
 patched = 0
 for path in paths:
