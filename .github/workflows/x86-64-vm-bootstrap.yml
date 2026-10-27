@@ -73,6 +73,63 @@ jobs:
           grep -q 'autoinstall' .build/vm/installer-v2/verified-grub.cfg
           grep -q 'ds=nocloud' .build/vm/installer-v2/verified-grub.cfg
 
+      - name: Boot integrated installer ISO with QEMU UEFI
+        shell: bash
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          iso=.build/vm/installer-v2/secuagentos-x86_64-installer-v2.iso
+          log=.build/vm/installer-v2/installer-uefi-serial.log
+          disk=.build/vm/installer-v2/installer-test-disk.qcow2
+          mkdir -p .build/vm/installer-v2
+          qemu-img create -f qcow2 "$disk" 12G
+          code=""
+          vars=""
+          for candidate in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+            if [ -r "$candidate" ]; then code="$candidate"; break; fi
+          done
+          for candidate in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+            if [ -r "$candidate" ]; then vars="$candidate"; break; fi
+          done
+          test -n "$code"
+          test -n "$vars"
+          cp "$vars" .build/vm/installer-v2/OVMF_VARS.fd
+          rm -f "$log"
+          qemu-system-x86_64 \
+            -machine q35 -cpu max -m 4096 -smp 2 \
+            -drive "if=pflash,format=raw,readonly=on,file=$code" \
+            -drive "if=pflash,format=raw,file=.build/vm/installer-v2/OVMF_VARS.fd" \
+            -drive "if=virtio,format=qcow2,file=$disk" \
+            -cdrom "$iso" -boot order=d \
+            -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+            -display none -serial "file:$log" -monitor none -no-reboot \
+            > .build/vm/installer-v2/qemu-uefi.log 2>&1 &
+          qemu_pid=$!
+          cleanup() { kill "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true; }
+          trap cleanup EXIT INT TERM
+          deadline=$((SECONDS + 1200))
+          saw_installer=0
+          saw_reboot=0
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if grep -Eiq 'subiquity|starting installer|ubuntu server installer|curtin' "$log" 2>/dev/null; then
+              saw_installer=1
+            fi
+            if grep -Eiq 'reboot: Restarting system|rebooting system|installation complete' "$log" 2>/dev/null; then
+              saw_reboot=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+          echo "========== INSTALLER UEFI SERIAL LOG =========="
+          cat "$log" 2>/dev/null || true
+          echo "========== QEMU UEFI LOG =========="
+          cat .build/vm/installer-v2/qemu-uefi.log 2>/dev/null || true
+          test "$saw_installer" -eq 1 || { echo "UEFI boot did not reach installer on serial console"; exit 1; }
+          test "$saw_reboot" -eq 1 || { echo "Installer did not reach a completion/reboot marker within 20 minutes"; exit 1; }
+
       - name: Build Ubuntu x86-64 VM artifact
         shell: bash
         run: |
